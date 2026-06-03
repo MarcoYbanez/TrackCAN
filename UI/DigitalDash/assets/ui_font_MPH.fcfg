@@ -1,0 +1,16 @@
+{
+  "codename": "MPH",
+  "ttf_path": "/assets/Cousine-Bold.ttf",
+  "bin_path": "/assets/ui_font_MPH.bin",
+  "c_path": "/assets/ui_font_MPH.c",
+  "cfg_path": "/assets/ui_font_MPH.fcfg",
+  "size": 108,
+  "bpp": 4,
+  "letters": 0,
+  "ranges": [
+    "0x20-0x7f"
+  ],
+  "symbols": "",
+  "customparams": "--no-compress --no-prefilter",
+  "uploaded": false
+}

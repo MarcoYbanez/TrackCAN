@@ -1,0 +1,16 @@
+{
+  "codename": "BOOST",
+  "ttf_path": "/assets/Cousine-Bold.ttf",
+  "bin_path": "/assets/ui_font_BOOST.bin",
+  "c_path": "/assets/ui_font_BOOST.c",
+  "cfg_path": "/assets/ui_font_BOOST.fcfg",
+  "size": 46,
+  "bpp": 4,
+  "letters": 0,
+  "ranges": [
+    "0x20-0x7f"
+  ],
+  "symbols": "",
+  "customparams": "--no-compress --no-prefilter",
+  "uploaded": false
+}
