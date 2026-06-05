@@ -20,6 +20,8 @@
 static volatile uint32_t l_start = {0};
 static volatile uint32_t l_stop = {0};
 static volatile uint32_t l_period = {0};
+
+static volatile float l_pulse_width = {0};
 static atomic_uint ethanol_content = ATOMIC_VAR_INIT(0);
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
@@ -50,6 +52,9 @@ void MeasurePwmSignal(uint gpio, uint32_t event_mask)
         l_period = l_start - l_stop;
         l_stop = l_start;
     }
+    if (event_mask & GPIO_IRQ_EDGE_FALL) {
+        l_pulse_width = ((41.25f * ((l_start - l_stop) / 1000.0f)) - 81.25);
+    }
 }
 
 static void ethanolContentReader(void *params)
@@ -64,9 +69,13 @@ static void ethanolContentReader(void *params)
     gpio_disable_pulls(PWM_INPUT_PIN);
 
     while (1) {
+        /* INFO: write ethanol_content*/
         int val_t = round((1000000.0f / l_period) - 50);
         val_t = val_t >= 0 && val_t <= 150 ? val_t : 0;
         atomic_store(&ethanol_content, val_t);
+
+        printf("temp: %f C*\n", l_pulse_width);
+
         vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
