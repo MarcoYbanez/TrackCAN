@@ -2,18 +2,27 @@ cmake_minimum_required(VERSION 3.13)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
-
 project(TrackCAN NONE)
 
 include (ExternalProject)
 
+
 ExternalProject_Add(Ethanol_Node
 		SOURCE_DIR ${CMAKE_SOURCE_DIR}/Ethanol_Node
-		BINARY_DIR ${CMAKE_BINARY_DIR}/Ethanol_Node
+		BINARY_DIR ${CMAKE_BINARY_DIR}/ethanol_build
 		CMAKE_ARGS
 		-DPICO_SDK_PATH=${CMAKE_CURRENT_SOURCE_DIR}/external/pico-sdk
 		-DFREERTOS_KERNEL_PATH=${CMAKE_CURRENT_SOURCE_DIR}/external/FreeRTOS-Kernel
-		-DTRACKCAN_OUTPUT_DIR=${CMAKE_BINARY_DIR}/output
+		-DTRACKCAN_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/output
+		INSTALL_COMMAND ""
+)
+
+ExternalProject_Add( DataLogger_Node
+		SOURCE_DIR ${CMAKE_SOURCE_DIR}/DataLogger_Node
+		BINARY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build/datalogger_build
+		CMAKE_ARGS
+		-DTRACKCAN_PATH=${CMAKE_CURRENT_SOURCE_DIR}
+		-DTRACKCAN_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/output
 		INSTALL_COMMAND ""
 )
 
