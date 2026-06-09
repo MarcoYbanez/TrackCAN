@@ -23,7 +23,7 @@ target_include_directories(teensy41_core PUBLIC
 )
 
 target_compile_definitions(teensy41_core PUBLIC
-		F_CPU=600000000 
+		F_CPU=600000000  
 		USB_SERIAL 
 		LAYOUT_US_ENGLISH 
 		USING_MAKEFILE
@@ -67,8 +67,6 @@ target_link_options(teensy41_core INTERFACE
     -mthumb
 		-T${TEENSY_CORE_PATH}/imxrt1062_t41.ld
 )
-
-# target_link_directories(teensy4_core INTERFACE ${CMAKE_CURRET_SOURCE_DIR}/arm_lib)
 
 target_link_libraries(teensy41_core INTERFACE
 		${CMAKE_CURRENT_SOURCE_DIR}/lib/libarm_cortexM7lfsp_math.a
