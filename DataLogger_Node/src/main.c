@@ -3,16 +3,15 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/entropy.h>
+#include <zephyr/drivers/spi.h>
 
-#define RAND_GEN DT_ALIAS(randdd)
-#if !DT_NODE_HAS_STATUS(RAND_GEN, okay)
-
-#error "randdd alias does not point to an okay device"
-
-#endif
+#define RAND_GEN DT_ALIAS(rand_gen)
+#define RAND_GEN DT_ALIAS(rand_gen)
+#define ENG_SPI DT_ALIAS(eng_spi)
 
 const struct device *random_gen = DEVICE_DT_GET(RAND_GEN);
-// const struct device *random_gen = DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy));
+// const struct spi_dt_spec *engine_management_adc = SPI_DT_SPEC_GET(ENG_SPI);
+//  const struct device *random_gen = DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy));
 int main(void)
 {
     while (1) {

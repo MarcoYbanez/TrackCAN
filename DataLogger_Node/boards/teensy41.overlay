@@ -1,18 +1,44 @@
-
-
 /{
 		aliases{
-				randdd = &trng;
+				rand-gen = &trng;
+				eng-spi = &pinmux_lpspi3;
 		};
 
-		    chosen {
+		chosen {
 
         zephyr,console = &lpuart6;
 
     };
+
+		user
+		{
+						compatible = "gpio-leds";
+				toggle_pin: toggle-pin{
+						label = "my pin";
+						gpios = <&gpio2 7 GPIO_ACTIVE_HIGH>;
+				};
+		};
 };
 
+&pinmux_lpspi3{
+		status = "okay";
+		
+		
+
+};
 
 &trng{
 		status = "okay";
+};
+
+&enet {
+		status = "disabled";
+};
+
+&enet_mac {
+		status = "disabled";
+};
+
+&enet_mdio {
+		status = "disabled";
 };
