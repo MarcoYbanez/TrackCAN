@@ -4,23 +4,58 @@
 #include <zephyr/device.h>
 #include <zephyr/drivers/entropy.h>
 #include <zephyr/drivers/spi.h>
+#include <zephyr/drivers/gpio.h>
+#include <zephyr/drivers/gpio/gpio_utils.h>
 
-#define RAND_GEN DT_ALIAS(rand_gen)
-#define RAND_GEN DT_ALIAS(rand_gen)
-#define ENG_SPI DT_ALIAS(eng_spi)
 
+/* GPIO */
+// #define IN_PIN DT_ALIAS(in)
+const struct gpio_dt_spec gp_pin = GPIO_DT_SPEC_GET(DT_PATH(user,out_pin), gpios);
+const struct gpio_dt_spec in_pin = GPIO_DT_SPEC_GET(DT_PATH(user,in_pin), gpios);
+
+
+/* RANDOM GENERATOR */
+#define RAND_GEN DT_ALIAS(rand_gen)
 const struct device *random_gen = DEVICE_DT_GET(RAND_GEN);
+
+/* ENGINE MANAGEMENT ADC*/
+#define ENG_SPI DT_ALIAS(eng_spi)
 // const struct spi_dt_spec *engine_management_adc = SPI_DT_SPEC_GET(ENG_SPI);
 //  const struct device *random_gen = DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy));
+
 int main(void)
 {
+
+		if(!gpio_is_ready_dt(&gp_pin))
+		{
+        printf("GPIO 7 BAD");
+		}
+
+		if(!gpio_is_ready_dt(&in_pin))
+		{
+        printf("GPIO 7 BAD");
+		}
+
+		printf("GPIO READY\n");
+
+
+		if(!spi_is_ready_dt(&in_pin))
+		{
+        printf("GPIO 7 BAD");
+		}
+
+		gpio_pin_configure_dt(&gp_pin, GPIO_OUTPUT_ACTIVE);
+		gpio_pin_configure_dt(&gp_pin, GPIO_INPUT);
+
     while (1) {
         uint32_t x = 100;
         int ret = entropy_get_entropy(random_gen, (uint8_t *)&x, sizeof(x));
         // int ret = entropy_get_entropy(random_gen, (uint8_t *)&x, sizeof(x));
 
         printf("true random number: %u\n", (uint32_t)x);
-        k_msleep(500);
+        printf("PIN READ: %u\n", (uint32_t)gpio_pin_get_raw(in_pin.port, in_pin.pin));
+        printf("PIN OUT: %u\n", (uint32_t)gpio_pin_get_dt(&gp_pin));
+        k_msleep(900);
     }
 
     return 0;

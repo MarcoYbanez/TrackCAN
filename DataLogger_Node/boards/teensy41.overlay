@@ -1,7 +1,9 @@
 /{
 		aliases{
 				rand-gen = &trng;
-				eng-spi = &pinmux_lpspi3;
+				eng-spi = &lpspi3;
+				out = &out;
+				in = &in;
 		};
 
 		chosen {
@@ -12,25 +14,47 @@
 
 		user
 		{
-						compatible = "gpio-leds";
-				toggle_pin: toggle-pin{
+				compatible = "gpio-leds";
+				out: out-pin{
+						gpios = <&gpio2 17 GPIO_ACTIVE_HIGH>;
 						label = "my pin";
-						gpios = <&gpio2 7 GPIO_ACTIVE_HIGH>;
+				};
+
+				in: in-pin{
+						gpios = <&gpio2 10 GPIO_ACTIVE_HIGH>;
+						label = "my in pin";
 				};
 		};
 };
 
+&lpspi3{
+		status = "okay";
+
+		cs-gpios = <&gpio1 28 GPIO_ACTIVE_LOW>;
+
+		engine-management-spi@0{
+				reg = <0>;
+		};
+
+};
+
 &pinmux_lpspi3{
 		status = "okay";
-		
-		
+};
 
+&gpio1{
+		status = "okay";
+};
+
+&gpio2{
+		status = "okay";
 };
 
 &trng{
 		status = "okay";
 };
 
+/* Ethernet */
 &enet {
 		status = "disabled";
 };
