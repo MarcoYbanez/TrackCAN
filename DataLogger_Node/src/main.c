@@ -20,6 +20,7 @@ const struct device *random_gen = DEVICE_DT_GET(RAND_GEN);
 
 /* ENGINE MANAGEMENT ADC*/
 #define ENG_SPI DT_ALIAS(eng_spi)
+const struct spi_dt_spec eng_spi = SPI_DT_SPEC_GET(ENG_SPI, SPI_OP_MODE_MASTER);
 // const struct spi_dt_spec *engine_management_adc = SPI_DT_SPEC_GET(ENG_SPI);
 //  const struct device *random_gen = DEVICE_DT_GET(DT_CHOSEN(zephyr_entropy));
 
@@ -28,20 +29,20 @@ int main(void)
 
 		if(!gpio_is_ready_dt(&gp_pin))
 		{
-        printf("GPIO 7 BAD");
+        printf("GPIO GP BAD");
 		}
 
 		if(!gpio_is_ready_dt(&in_pin))
 		{
-        printf("GPIO 7 BAD");
+        printf("GPIO IN BAD");
 		}
 
 		printf("GPIO READY\n");
 
 
-		if(!spi_is_ready_dt(&in_pin))
+		if(!spi_is_ready_dt(&eng_spi ))
 		{
-        printf("GPIO 7 BAD");
+        printf("GPIO ENG SPI BAD");
 		}
 
 		gpio_pin_configure_dt(&gp_pin, GPIO_OUTPUT_ACTIVE);
