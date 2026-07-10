@@ -1,0 +1,71 @@
+# NASA-style C formatting
+#
+# This config enforces the C formatting conventions that clang-format can
+# represent. Naming, documentation, and other semantic guide requirements are
+# intentionally left to review and static analysis.
+#
+# Run:
+#   clang-format -i path/to/file.c path/to/file.h
+
+BasedOnStyle: LLVM
+Language: Cpp
+
+# NASA C code uses four spaces, never tabs, and an 80-column limit.
+UseTab: Always
+TabWidth: 4
+IndentWidth: 4
+ContinuationIndentWidth: 4
+ColumnLimit: 120
+
+# Put opening braces on their own line for functions and control statements.
+BreakBeforeBraces: Allman
+
+# Keep case labels at the switch indentation level.
+IndentCaseLabels: false
+IndentCaseBlocks: false
+
+# Keep the asterisk with the variable name: char *name.
+DerivePointerAlignment: false
+PointerAlignment: Right
+ReferenceAlignment: Pointer
+
+# Do not rewrite project include ordering.
+SortIncludes: Never
+IncludeBlocks: Preserve
+
+# Keep all control flow and function bodies expanded across multiple lines.
+AllowShortBlocksOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: false
+
+# Standard C spacing.
+SpaceBeforeParens: ControlStatements
+SpaceAfterCStyleCast: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# Avoid alignment and line-packing that obscure simple C source structure.
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+AlignConsecutiveMacros: None
+AlignOperands: DontAlign
+BinPackArguments: false
+BinPackParameters: false
+AllowAllArgumentsOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+
+# Do not add or remove braces automatically.
+InsertBraces: false
+RemoveBracesLLVM: false
+
+# Preserve existing comments rather than reflowing their text.
+ReflowComments: false
+FixNamespaceComments: false
+
+# C-specific preferences.
+Cpp11BracedListStyle: false
+IndentGotoLabels: false
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
