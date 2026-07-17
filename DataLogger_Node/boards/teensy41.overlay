@@ -1,0 +1,87 @@
+/{
+		aliases{
+				rand-gen = &trng;
+				eng-spi = &engine_management_spi;
+				out = &out;
+				in = &in;
+		};
+
+		chosen {
+
+        zephyr,console = &lpuart6;
+
+    };
+
+		user
+		{
+				compatible = "gpio-leds";
+				out: out-pin{
+						gpios = <&gpio2 17 GPIO_ACTIVE_HIGH>;
+						label = "my pin";
+				};
+
+				in: in-pin{
+						gpios = <&gpio2 10 GPIO_ACTIVE_HIGH>;
+						label = "my in pin";
+				};
+		};
+};
+
+&lpspi3{
+		status = "okay";
+
+		cs-gpios = <&gpio1 28 GPIO_ACTIVE_LOW>;
+
+		engine_management_spi: engine-management-spi@0{
+				compatible = "vnd,spi-device";
+				reg = <0>;
+				spi-max-frequency = <1000000>;
+				/* spi-cpol; */
+
+				spi-interframe-delay-ns = <0>;
+						/* description: | */
+						/*   Delay in nanoseconds between SPI words. */
+						/*   Default of 0 is special value which will assume to mean half of the SCK period. */
+
+				spi-cs-setup-delay-ns = <100>;
+						/* description: | */
+						/*   Delay in nanoseconds to be introduced by the controller after CS is asserted. */
+						/*   Also known as enable lead time. */
+
+				spi-cs-hold-delay-ns = <100>;
+						/* description: | */
+						/*  Delay in nanoseconds to be introduced by the controller before the CS is de-asserted. */
+						/*   Also known as enable lag time. */
+
+		};
+
+};
+
+&pinmux_lpspi3{
+		status = "okay";
+};
+
+&gpio1{
+		status = "okay";
+};
+
+&gpio2{
+		status = "okay";
+};
+
+&trng{
+		status = "okay";
+};
+
+/* Ethernet */
+&enet {
+		status = "disabled";
+};
+
+&enet_mac {
+		status = "disabled";
+};
+
+&enet_mdio {
+		status = "disabled";
+};
