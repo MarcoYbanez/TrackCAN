@@ -12,17 +12,30 @@ set(CMAKE_CXX_STANDARD 17)
 
 pico_sdk_init()
 
+# Shared TrackCAN library (also used by the other Nodes). The root CMakeLists passes
+# TRACKCAN_PATH; fall back to the parent directory for standalone builds.
+if(NOT DEFINED TRACKCAN_PATH)
+    set(TRACKCAN_PATH ${CMAKE_CURRENT_LIST_DIR}/..)
+endif()
+
 add_executable(ethanol_node
     main.c
+    ${TRACKCAN_PATH}/can/ethanol.c
+    ${TRACKCAN_PATH}/can/common/trackcan_core.c
+    ${TRACKCAN_PATH}/can/generated/trackcan.c
 )
 
 target_include_directories(ethanol_node PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}
+    ${TRACKCAN_PATH}/can
+    ${TRACKCAN_PATH}/can/common
+    ${TRACKCAN_PATH}/can/generated
 )
 
 target_link_libraries(ethanol_node
     pico_stdlib
 		hardware_i2c
+		hardware_spi
     FreeRTOS-Kernel
     FreeRTOS-Kernel-Heap4
 )

@@ -1,4 +1,5 @@
 #include "FreeRTOS.h"
+#include "ethanol.h"
 #include "hardware/i2c.h"
 #include "pico/stdlib.h"
 #include "task.h"
@@ -57,6 +58,23 @@ void MeasurePwmSignal(uint gpio, uint32_t event_mask)
     }
 }
 
+static void ethanolCanPublish(int content_pct, float fuel_temp_degc)
+{
+    float tenths = fuel_temp_degc * 10.0f;
+
+    if (content_pct < 0) {
+        content_pct = 0;
+    } else if (content_pct > 100) {
+        content_pct = 100;
+    }
+    if (!(tenths > -32768.0f)) { /* also catches NaN */
+        tenths = -32768.0f;
+    } else if (tenths > 32767.0f) {
+        tenths = 32767.0f;
+    }
+    ethanol_can_set_sample((uint8_t)content_pct, (int16_t)tenths);
+}
+
 static void ethanolContentReader(void *params)
 {
     (void)params;
@@ -73,6 +91,9 @@ static void ethanolContentReader(void *params)
         int val_t = round((1000000.0f / l_period) - 50);
         val_t = val_t >= 0 && val_t <= 150 ? val_t : 0;
         atomic_store(&l_ethanol_content, val_t);
+
+        /* INFO: CAN is best effort. It must never affect the DAC output to the ECU. */
+        ethanolCanPublish(val_t, l_pulse_width);
 
         printf("temp: %f C*\n", l_pulse_width);
 
@@ -126,8 +147,10 @@ int main(void)
 {
     stdio_init_all();
 
-    xTaskCreate(ethanolContentReader, "ethanol_reader", 256, NULL, 1, NULL);
-    xTaskCreate(ethanolContentDAC, "ethanol_DAC", 256, NULL, 1, NULL);
+    /* The ECU signal tasks outrank the CAN task (priority 1) so CAN can never delay them. */
+    xTaskCreate(ethanolContentReader, "ethanol_reader", 256, NULL, 2, NULL);
+    xTaskCreate(ethanolContentDAC, "ethanol_DAC", 256, NULL, 2, NULL);
+    (void)ethanol_can_start();
 
     vTaskStartScheduler();
 
