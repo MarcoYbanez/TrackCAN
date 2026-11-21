@@ -29,9 +29,15 @@ BO_ 513 DataLogger_Lights: 1 DataLogger
  SG_ EBrake : 6|1@1+ (1,0) [0|1] "" Dash
  SG_ HighBeam : 7|1@1+ (1,0) [0|1] "" Dash
 
-BO_ 768 Ethanol_Data: 3 Ethanol
+BO_ 768 Ethanol_Data: 4 Ethanol
  SG_ EthanolContent : 0|8@1+ (1,0) [0|100] "%" Dash,DataLogger
  SG_ FuelTemp : 8|16@1- (0.1,0) [-3276.8|3276.7] "degC" Dash,DataLogger
+ SG_ State : 24|3@1+ (1,0) [0|4] "" Dash,DataLogger
+ SG_ Critical : 27|1@1+ (1,0) [0|1] "" Dash,DataLogger
+ SG_ OutputIsDefault : 28|1@1+ (1,0) [0|1] "" Dash,DataLogger
+ SG_ SignalValid : 29|1@1+ (1,0) [0|1] "" Dash,DataLogger
+ SG_ DacWarning : 30|1@1+ (1,0) [0|1] "" Dash,DataLogger
+ SG_ ResetRecent : 31|1@1+ (1,0) [0|1] "" Dash,DataLogger
 
 BO_ 1793 Heartbeat_Dash: 2 Dash
  SG_ Status : 0|8@1+ (1,0) [0|255] "" DataLogger,Ethanol
@@ -54,3 +60,15 @@ BA_ "GenMsgCycleTime" BO_ 768 100;
 BA_ "GenMsgCycleTime" BO_ 1793 1000;
 BA_ "GenMsgCycleTime" BO_ 1794 1000;
 BA_ "GenMsgCycleTime" BO_ 1795 1000;
+
+CM_ SG_ 768 FuelTemp "-3276.8 (raw 0x8000) means the fuel temperature is invalid.";
+CM_ SG_ 768 State "Ethanol output state. 0 Boot (output is the E85 default), 1 Qualifying, 2 Ok, 3 Holding (sensor lost, last qualified value held), 4 Critical.";
+CM_ SG_ 768 Critical "1 = extreme fault: show the big error. Latched until power cycle, except Never Qualified which clears once the sensor qualifies.";
+CM_ SG_ 768 OutputIsDefault "1 = the value sent to the ECU is the E85 default, not a measurement.";
+CM_ SG_ 768 SignalValid "1 = the sensor signal is currently valid.";
+CM_ SG_ 768 DacWarning "1 = the DAC readback differs from the commanded output by a small amount (warning only).";
+CM_ SG_ 768 ResetRecent "1 = the node restarted from a watchdog reset since power-up.";
+CM_ SG_ 1795 Status "Ethanol Node active fault code, highest priority first: 4, 3, 6, 5, 2, 1. See value table.";
+
+VAL_ 768 State 0 "Boot" 1 "Qualifying" 2 "Ok" 3 "Holding" 4 "Critical";
+VAL_ 1795 Status 0 "None" 1 "SensorLost" 2 "NeverQualified" 3 "DacMismatch" 4 "DacOvervoltage" 5 "WatchdogReset" 6 "DacI2cFailure";

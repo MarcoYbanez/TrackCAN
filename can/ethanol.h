@@ -12,6 +12,7 @@
 /*******************************************************
  * Includes
  *******************************************************/
+#include <stdbool.h>
 #include <stdint.h>
 
 #include "trackcan_core.h"
@@ -23,7 +24,20 @@
 /* Creates the CAN task. Call before vTaskStartScheduler(). Returns 0 on success. */
 int ethanol_can_start(void);
 
-/* Lock-free; callable from any task. content_pct: 0..100, fuel_temp_degc_x10: 0.1 degC. */
-void ethanol_can_set_sample(uint8_t content_pct, int16_t fuel_temp_degc_x10);
+/* What the Ethanol Node reports on CAN. Filled by main.c from the safety logic. */
+typedef struct {
+    uint8_t content_pct;   /* what the ECU is being given, 0..100 */
+    int16_t fuel_temp_x10; /* 0.1 degC, or INT16_MIN when invalid */
+    uint8_t state;         /* 0 Boot, 1 Qualifying, 2 Ok, 3 Holding, 4 Critical */
+    bool critical;
+    bool output_is_default;
+    bool signal_valid;
+    bool dac_warning;
+    bool reset_recent;
+    uint8_t fault_code; /* Heartbeat_Ethanol status, see can/trackcan.dbc */
+} ethanol_can_status_t;
+
+/* Callable from any task (copied under a critical section). */
+void ethanol_can_set_status(const ethanol_can_status_t *status);
 
 #endif /* ETHANOL_CAN_H */

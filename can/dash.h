@@ -35,7 +35,18 @@ struct dash_display {
     tcan_rx_state_t ethanol_state;
     uint8_t ethanol_pct;
     int32_t fuel_temp_degf_x10;
+    bool fuel_temp_valid; /* false when the Node reports the temperature as invalid */
+
+    /* Ethanol Node health. ethanol_alert is the "something is very wrong" flag: show the big
+     * error screen. It is set when the Node reports Critical, when its messages stop (stale),
+     * or when none arrived within DASH_ETHANOL_BOOT_ALERT_MS of the Dash starting. */
+    uint8_t ethanol_node_state;  /* 0 Boot, 1 Qualifying, 2 Ok, 3 Holding, 4 Critical */
+    bool ethanol_output_default; /* the ECU is being given the E85 default, not a measurement */
+    bool ethanol_alert;
+    uint8_t ethanol_fault_code; /* Heartbeat_Ethanol status: 0 none ... 6, see can/trackcan.dbc */
 };
+
+#define DASH_ETHANOL_BOOT_ALERT_MS 2000u
 
 /*******************************************************
  * Public Function Prototypes
