@@ -12,7 +12,8 @@
  *******************************************************/
 #include "ethanol.h"
 
-#include <stdatomic.h>
+#include <stdint.h>
+#include <string.h>
 
 #include "FreeRTOS.h"
 #include "hardware/gpio.h"
@@ -91,8 +92,10 @@ static uint8_t l_heartbeat_counter;
 static bool l_ready;
 static bool l_abort_pending;
 
-/* Packed so a single atomic load/store is enough: bits 0-7 content, bits 8-23 temp. */
-static atomic_uint l_sample = ATOMIC_VAR_INIT(0);
+/* Latest status from the safety logic. Copied under a critical section; never read while it is
+ * being written. Initial values describe the boot state. */
+static ethanol_can_status_t l_status = {
+    .content_pct = 85, .fuel_temp_x10 = INT16_MIN, .output_is_default = true};
 
 /*******************************************************
  * Static Function Prototypes
@@ -326,11 +329,22 @@ static void publish(void)
     uint8_t buf[TCAN_MAX_DLC];
 
     if (tcan_tx_due(&l_can, TCAN_MSG_ETHANOL_DATA)) {
-        unsigned packed = atomic_load(&l_sample);
-        struct trackcan_ethanol_data_t m = {
-            .ethanol_content = (uint8_t)(packed & 0xFFu),
-            .fuel_temp = (int16_t)((packed >> 8) & 0xFFFFu),
-        };
+        ethanol_can_status_t st;
+        struct trackcan_ethanol_data_t m;
+
+        taskENTER_CRITICAL();
+        st = l_status;
+        taskEXIT_CRITICAL();
+
+        memset(&m, 0, sizeof(m));
+        m.ethanol_content = st.content_pct;
+        m.fuel_temp = st.fuel_temp_x10;
+        m.state = st.state;
+        m.critical = st.critical ? 1 : 0;
+        m.output_is_default = st.output_is_default ? 1 : 0;
+        m.signal_valid = st.signal_valid ? 1 : 0;
+        m.dac_warning = st.dac_warning ? 1 : 0;
+        m.reset_recent = st.reset_recent ? 1 : 0;
 
         if (trackcan_ethanol_data_pack(buf, &m, sizeof(buf)) > 0) {
             (void)tcan_tx(&l_can, TCAN_MSG_ETHANOL_DATA, buf);
@@ -338,8 +352,16 @@ static void publish(void)
     }
 
     if (tcan_tx_due(&l_can, TCAN_MSG_HEARTBEAT_ETHANOL)) {
-        struct trackcan_heartbeat_ethanol_t hb = {.status = 0, .counter = l_heartbeat_counter++};
+        ethanol_can_status_t st;
+        struct trackcan_heartbeat_ethanol_t hb;
 
+        taskENTER_CRITICAL();
+        st = l_status;
+        taskEXIT_CRITICAL();
+
+        /* Status carries the active fault code, so the dash and logger see every change. */
+        hb.status = st.fault_code;
+        hb.counter = l_heartbeat_counter++;
         if (trackcan_heartbeat_ethanol_pack(buf, &hb, sizeof(buf)) > 0) {
             (void)tcan_tx(&l_can, TCAN_MSG_HEARTBEAT_ETHANOL, buf);
         }
@@ -377,9 +399,9 @@ int ethanol_can_start(void)
                : -1;
 }
 
-void ethanol_can_set_sample(uint8_t content_pct, int16_t fuel_temp_degc_x10)
+void ethanol_can_set_status(const ethanol_can_status_t *status)
 {
-    unsigned packed = (unsigned)content_pct | ((unsigned)(uint16_t)fuel_temp_degc_x10 << 8);
-
-    atomic_store(&l_sample, packed);
+    taskENTER_CRITICAL();
+    l_status = *status;
+    taskEXIT_CRITICAL();
 }

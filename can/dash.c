@@ -17,6 +17,7 @@ static tcan_t l_can;
 static uint8_t l_heartbeat_counter;
 static uint16_t l_rpm;
 static uint16_t l_speed_x100;
+static uint32_t l_init_ms;
 
 /*******************************************************
  * Static Function Definitions
@@ -50,7 +51,11 @@ bool dash_can_init(const tcan_port_t *port)
     l_heartbeat_counter = 0;
     l_rpm = 0;
     l_speed_x100 = 0;
-    return tcan_init(&l_can, port, TCAN_NODE_DASH);
+    if (!tcan_init(&l_can, port, TCAN_NODE_DASH)) {
+        return false;
+    }
+    l_init_ms = port->now_ms();
+    return true;
 }
 
 void dash_can_step(void)
@@ -92,9 +97,27 @@ void dash_can_get_display(struct dash_display *out)
     if (out->ethanol_state != TCAN_RX_NEVER) {
         struct trackcan_ethanol_data_t e;
 
-        if (trackcan_ethanol_data_unpack(&e, buf, 3) == 0) {
+        if (trackcan_ethanol_data_unpack(&e, buf, TRACKCAN_ETHANOL_DATA_LENGTH) == 0) {
             out->ethanol_pct = e.ethanol_content;
-            out->fuel_temp_degf_x10 = tcan_degc_x10_to_degf_x10(e.fuel_temp);
+            out->fuel_temp_valid = (e.fuel_temp != INT16_MIN);
+            if (out->fuel_temp_valid) {
+                out->fuel_temp_degf_x10 = tcan_degc_x10_to_degf_x10(e.fuel_temp);
+            }
+            out->ethanol_node_state = e.state;
+            out->ethanol_output_default = (e.output_is_default != 0);
+            out->ethanol_alert = (e.critical != 0);
         }
+    }
+
+    /* The Ethanol Node going quiet is itself critical: the ECU would be fed a frozen value. */
+    if (out->ethanol_state == TCAN_RX_STALE) {
+        out->ethanol_alert = true;
+    } else if (out->ethanol_state == TCAN_RX_NEVER &&
+               (uint32_t)(l_can.port->now_ms() - l_init_ms) > DASH_ETHANOL_BOOT_ALERT_MS) {
+        out->ethanol_alert = true;
+    }
+
+    if (tcan_rx_get(&l_can, TCAN_MSG_HEARTBEAT_ETHANOL, buf) != TCAN_RX_NEVER) {
+        out->ethanol_fault_code = buf[0];
     }
 }

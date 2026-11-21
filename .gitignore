@@ -1,3 +1,6 @@
 build/
 output/
 
+
+# Purchase invoices contain personal details (address, payment info). Never commit.
+assets/invoices/

@@ -117,7 +117,7 @@ static void test_message_table(void)
         {TCAN_MSG_DASH_ENGINE, 0x100, 4, 20, TCAN_NODE_DASH},
         {TCAN_MSG_DATALOGGER_ANALOG, 0x200, 8, 50, TCAN_NODE_DATALOGGER},
         {TCAN_MSG_DATALOGGER_LIGHTS, 0x201, 1, 100, TCAN_NODE_DATALOGGER},
-        {TCAN_MSG_ETHANOL_DATA, 0x300, 3, 100, TCAN_NODE_ETHANOL},
+        {TCAN_MSG_ETHANOL_DATA, 0x300, 4, 100, TCAN_NODE_ETHANOL},
         {TCAN_MSG_HEARTBEAT_DASH, 0x701, 2, 1000, TCAN_NODE_DASH},
         {TCAN_MSG_HEARTBEAT_DATALOGGER, 0x702, 2, 1000, TCAN_NODE_DATALOGGER},
         {TCAN_MSG_HEARTBEAT_ETHANOL, 0x703, 2, 1000, TCAN_NODE_ETHANOL},
@@ -176,13 +176,38 @@ static void test_pack_known_bytes(void)
         CHECK_BYTES(buf, want);
     }
 
-    /* Ethanol_Data: 85 % = 0x55; -12.3 degC = -123 = 0xFF85. */
+    /* Ethanol_Data: 85 % = 0x55; -12.3 degC = -123 = 0xFF85. Status byte (byte 3): State is
+     * bits 0-2, Critical bit 3, OutputIsDefault bit 4, SignalValid bit 5, DacWarning bit 6,
+     * ResetRecent bit 7. State Holding (3) + SignalValid = 0x03 | 0x20 = 0x23. */
     {
-        struct trackcan_ethanol_data_t s = {.ethanol_content = 85, .fuel_temp = -123};
-        static const uint8_t want[] = {0x55, 0x85, 0xFF};
+        struct trackcan_ethanol_data_t s;
+        static const uint8_t want[] = {0x55, 0x85, 0xFF, 0x23};
 
+        memset(&s, 0, sizeof(s));
+        s.ethanol_content = 85;
+        s.fuel_temp = -123;
+        s.state = 3;
+        s.signal_valid = 1;
         memset(buf, 0xEE, sizeof(buf));
-        CHECK(trackcan_ethanol_data_pack(buf, &s, sizeof(buf)) == 3);
+        CHECK(trackcan_ethanol_data_pack(buf, &s, sizeof(buf)) == 4);
+        CHECK_BYTES(buf, want);
+    }
+
+    /* Critical alert: E85 default (0x55), temperature invalid (0x8000 -> 00 80), State
+     * Critical (4) | Critical 0x08 | OutputIsDefault 0x10 | ResetRecent 0x80 = 0x9C. */
+    {
+        struct trackcan_ethanol_data_t s;
+        static const uint8_t want[] = {0x55, 0x00, 0x80, 0x9C};
+
+        memset(&s, 0, sizeof(s));
+        s.ethanol_content = 85;
+        s.fuel_temp = INT16_MIN;
+        s.state = 4;
+        s.critical = 1;
+        s.output_is_default = 1;
+        s.reset_recent = 1;
+        memset(buf, 0xEE, sizeof(buf));
+        CHECK(trackcan_ethanol_data_pack(buf, &s, sizeof(buf)) == 4);
         CHECK_BYTES(buf, want);
     }
 
@@ -351,7 +376,7 @@ static void test_dash_display_and_publish(void)
     /* DataLogger_Analog, hand-computed: 4.50 bar, -40.0 C, 95.0 C, 75.5 %. */
     static const uint8_t analog[] = {0xC2, 0x01, 0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
     static const uint8_t lights[] = {0x84};
-    static const uint8_t ethanol[] = {0x55, 0x85, 0xFF}; /* 85 %, -12.3 C */
+    static const uint8_t ethanol[] = {0x55, 0x85, 0xFF, 0x23}; /* 85 %, -12.3 C, Holding */
 
     fake_reset();
     CHECK(dash_can_init(&l_port));
@@ -361,7 +386,7 @@ static void test_dash_display_and_publish(void)
     l_now = 5000;
     fake_inject(0x200, 8, analog);
     fake_inject(0x201, 1, lights);
-    fake_inject(0x300, 3, ethanol);
+    fake_inject(0x300, 4, ethanol);
     dash_can_step();
     dash_can_get_display(&d);
 
@@ -373,6 +398,8 @@ static void test_dash_display_and_publish(void)
     CHECK(d.lights_state == TCAN_RX_FRESH && d.lights == 0x84);
     CHECK(d.ethanol_state == TCAN_RX_FRESH && d.ethanol_pct == 85);
     CHECK(d.fuel_temp_degf_x10 == 99); /* -12.3 C = 9.86 F = 98.6 tenths, rounds to 99 */
+    CHECK(d.fuel_temp_valid);
+    CHECK(d.ethanol_node_state == 3 && !d.ethanol_output_default && !d.ethanol_alert);
 
     /* DataLogger_Analog has a 50 ms cycle, so it goes stale after 150 ms. */
     l_now = 5150;
@@ -402,6 +429,55 @@ static void test_dash_display_and_publish(void)
     CHECK(l_sent_count == 1 && l_sent[0].id == 0x100);
 }
 
+static void test_dash_ethanol_alerts(void)
+{
+    struct dash_display d;
+    static const uint8_t critical[] = {0x55, 0x00, 0x80,
+                                       0x9C};             /* Critical, default, temp invalid */
+    static const uint8_t ok[] = {0x55, 0x85, 0xFF, 0x22}; /* State Ok (2) + SignalValid */
+    static const uint8_t hb_fault[] = {0x03, 0x07};       /* fault code 3, counter 7 */
+
+    /* Nothing from the Ethanol Node: no alert for the first 2 s, then a critical alert. */
+    fake_reset();
+    CHECK(dash_can_init(&l_port));
+    l_now = 2000;
+    dash_can_get_display(&d);
+    CHECK(d.ethanol_state == TCAN_RX_NEVER && !d.ethanol_alert);
+    l_now = 2001;
+    dash_can_get_display(&d);
+    CHECK(d.ethanol_alert);
+
+    /* A healthy Node: no alert. */
+    fake_reset();
+    CHECK(dash_can_init(&l_port));
+    l_now = 100;
+    fake_inject(0x300, 4, ok);
+    dash_can_step();
+    dash_can_get_display(&d);
+    CHECK(!d.ethanol_alert && d.ethanol_node_state == 2);
+
+    /* The Node goes quiet (stale after 3 cycles of 100 ms): alert. */
+    l_now = 400;
+    dash_can_get_display(&d);
+    CHECK(!d.ethanol_alert);
+    l_now = 401;
+    dash_can_get_display(&d);
+    CHECK(d.ethanol_state == TCAN_RX_STALE && d.ethanol_alert);
+
+    /* The Node reports Critical: alert, E85 default and invalid temperature are shown as such. */
+    fake_reset();
+    CHECK(dash_can_init(&l_port));
+    l_now = 100;
+    fake_inject(0x300, 4, critical);
+    fake_inject(0x703, 2, hb_fault);
+    dash_can_step();
+    dash_can_get_display(&d);
+    CHECK(d.ethanol_alert);
+    CHECK(d.ethanol_node_state == 4 && d.ethanol_output_default);
+    CHECK(!d.fuel_temp_valid); /* the 0x8000 marker is never turned into a fake degF */
+    CHECK(d.ethanol_fault_code == 3);
+}
+
 /*******************************************************
  * Public Function Definitions
  *******************************************************/
@@ -416,6 +492,7 @@ int main(void)
     test_init_rejects_bad_port();
     test_unit_conversion();
     test_dash_display_and_publish();
+    test_dash_ethanol_alerts();
 
     printf("%d checks, %d failures\n", l_checks, l_failures);
     return l_failures == 0 ? 0 : 1;
