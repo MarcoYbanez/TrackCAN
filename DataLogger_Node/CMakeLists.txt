@@ -10,11 +10,14 @@ endif()
 
 target_sources(app PRIVATE
 	src/main.c
+	src/bootloader/bootloader_control.c
+	src/bootloader/bootloader_request.c
 	${TRACKCAN_PATH}/can/datalogger.c
 	${TRACKCAN_PATH}/can/common/trackcan_core.c
 	${TRACKCAN_PATH}/can/generated/trackcan.c
 )
 target_include_directories(app PRIVATE
+	src/bootloader
 	${TRACKCAN_PATH}/can
 	${TRACKCAN_PATH}/can/common
 	${TRACKCAN_PATH}/can/generated

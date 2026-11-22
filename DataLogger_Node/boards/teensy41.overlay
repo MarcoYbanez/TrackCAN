@@ -106,3 +106,9 @@
 &flexcan1 {
 		status = "disabled";
 };
+
+&zephyr_udc0 {
+	usb_serial: usb_serial {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};

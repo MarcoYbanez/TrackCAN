@@ -1,4 +1,5 @@
 
+#include "bootloader_control.h"
 #include <stdio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -24,6 +25,9 @@ const struct spi_dt_spec eng_spi = SPI_DT_SPEC_GET(ENG_SPI, SPI_WORD_SET(8) | SP
 
 int main(void)
 {
+	if (bootloader_control_start() < 0) {
+		printf("USB bootloader request unavailable\n");
+	}
 	struct spi_buf_set rx_channels[8] = {
 		{ .buffers =
 			  (struct spi_buf[]){
