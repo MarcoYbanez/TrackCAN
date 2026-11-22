@@ -40,7 +40,7 @@ cmake -S DigitalDash_Node/tests -B build/dash_tests && cmake --build build/dash_
 
 ## Demo drive (until real CAN data arrives)
 
-The M4 image runs `shared/dash_sim.c`: a repeating ~44 s loop of idle, full-throttle pulls through 1st to 5th gear,
+The demo M4 image runs `shared/dash_sim.c`: a repeating ~44 s loop of idle, full-throttle pulls through 1st to 5th gear,
 cruising and braking, with boost, AFR, battery, temperatures, oil pressure, fuel and lamps that go with it. Loop 2
 (about 90 s in) injects an oil pressure sag, loop 3 a charging fault and a check engine lamp; the pattern repeats
 every 3 loops. The values are a plausible model, not measurements. Boost, battery, AFR and gear have no CAN source
@@ -70,3 +70,31 @@ See `docs/user-todo/dash-todo.md` for the bench test.
 - FDCAN on the M4 (M2): the kernel clock source is chosen by the M7; whether the M4 driver can use it
   as configured is unproven.
 - The 1024x600 Winstar panel is a memory-bandwidth stretch on this board (16-bit SDRAM).
+
+## Build modes, the DEMO marker and the watchdogs (TCAN-10)
+
+**Two M4 images.** `scripts/dash_build_flash.sh build demo` (the default until the FDCAN port exists, TCAN-6) publishes the
+demo drive and sets `DASH_FLAG_DEMO` in the snapshot; the M7 then draws a **red frame round the whole screen and a red
+DEMO badge** on every frame, so the demo can never be mistaken for real readings. `build live` publishes only what the
+CAN logic received: speed, RPM, boost, battery, AFR and gear have no source yet, so they show `--` (the snapshot carries a
+validity bit for each), and with no CAN port yet the ethanol alert comes on 2 s after start. There is no runtime switch:
+the flag is a compile-time constant of the demo image, so a live image cannot set it.
+
+**Watchdogs.** Each core has its own independent hardware watchdog and a monitor thread that feeds it only while the core's
+tasks keep checking in (`shared/dash_health.c`, the same design as the Ethanol Node's AUTOSAR-style alive supervision:
+too few check-ins is a failure, so is a runaway loop; two failed 100 ms periods stop the feed for good; the 300 ms
+hardware timeout then resets the chip).
+
+- M7: IWDG1, supervising the render loop and the snapshot read.
+- M4: IWDG2, supervising the publish loop. Zephyr only describes IWDG1, so `m4/app.overlay` adds a node for IWDG2 at
+  0x58004C00 (`IWDG2_BASE` in `stm32h745xx.h`); the Zephyr driver uses the first enabled watchdog node.
+- Measured on the board (console over the ST-LINK USB serial): a hung M7 is reset in about 0.6 s, a hung M4 in about 0.4 s,
+  and **either reset restarts the whole chip**, both cores (the demo restarts from the beginning). The console prints
+  `boot: last reset cause 0x11 (WATCHDOG)` after one.
+- What the screen does: LTDC keeps scanning the last frame while the M7 is stalled, so a frozen picture is on screen for
+  at most about 0.6 s before the reset; after it every value shows `--` until live data arrives. A dead M4 is shown as the
+  "NO DATA CAN CORE LOST" alert after 250 ms.
+- Bench test: build with `-DDASH_TEST_HANG_AFTER_MS=5000` (a CMake variable of either core's project) to make that core busy-loop
+  after 5 s. Never set it in a car build.
+
+The M7 console also prints the link state changes and, once a second, the flags (`demo`, `engine`, `alert`).

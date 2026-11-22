@@ -1,0 +1,4 @@
+/* The M7's watchdog is IWDG1, described by Zephyr but disabled by default. */
+&iwdg1 {
+	status = "okay";
+};

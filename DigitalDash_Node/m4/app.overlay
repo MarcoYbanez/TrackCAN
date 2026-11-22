@@ -1,0 +1,14 @@
+/*
+ * The M4's watchdog. Zephyr only describes IWDG1 (the M7's). The H745 has a second, independent watchdog, IWDG2, at
+ * 0x58004C00 (stm32h745xx.h: IWDG2_BASE = D3_APB1PERIPH_BASE + 0x4C00). The Zephyr driver uses the first enabled
+ * "st,stm32-watchdog" node, so enabling only this one makes it drive IWDG2.
+ */
+/ {
+	soc {
+		iwdg2: watchdog@58004c00 {
+			compatible = "st,stm32-watchdog";
+			reg = <0x58004c00 0x400>;
+			status = "okay";
+		};
+	};
+};

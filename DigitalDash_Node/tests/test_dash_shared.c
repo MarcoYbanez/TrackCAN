@@ -122,8 +122,7 @@ static void test_layout_mismatch(void)
 
     /* Hand-computed: version 1 in the high half, the snapshot size in the low half. */
     CHECK(DASH_LAYOUT_TAG ==
-          ((3u << 16) |
-           (uint32_t)sizeof(dash_snapshot_t))); /* version 3: boost, battery, AFR, gear */
+          ((4u << 16) | (uint32_t)sizeof(dash_snapshot_t))); /* version 4: flags and engine-valid */
 
     dash_shared_init(&sh);
     dash_shared_write(&sh, &(dash_snapshot_t){.rpm = 1234});
