@@ -3232,6 +3232,16 @@
    "colour": "#0E1620"
   }
  ],
+ "boost_fill": {
+  "x": 309,
+  "y": 178,
+  "w": 161,
+  "h": 6,
+  "colours_in_source_image": [
+   "#00E0FF"
+  ],
+  "fill_direction": "left to right, width = round(w * boost / max_boost)"
+ },
  "captions": [
   {
    "x": 412,

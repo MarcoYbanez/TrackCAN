@@ -147,6 +147,19 @@ def main():
     lit_columns(ROOT / "UI/DigitalDash/assets/Main_Tach/MainTachometer00060.png", main_bar, 20)
     lit_columns(ROOT / "UI/DigitalDash/assets/Top_Tach/TopTach00001.png", top_bar, 8)
 
+    # Boost meter. In the SquareLine export it is a slider (ui_B_Meter, 161 x 6, centre aligned, x +149, y +45
+    # from the centre of the 480x272 screen) whose indicator is the flat cyan image assets/BoostMeter.png.
+    # Centre alignment gives x = (480 - 161) // 2 + 149 = 308 and y = (272 - 6) // 2 + 45 = 178. The dark track
+    # it slides over is boost_track (in the background). The fill is drawn left to right in proportion to boost.
+    bm = Image.open(ROOT / "UI/DigitalDash/assets/BoostMeter.png").convert("RGBA")
+    bm_colours = sorted({"#%02X%02X%02X" % p[:3] for p in bm.getdata()})
+    # The design intends the fill centred in the track (1 px margin all round). LVGL's integer rounding of the
+    # slider alone would put it at x = 308, touching the left edge, so the centred position is used.
+    tr = boost_track[0]
+    boost_fill = {"x": tr["x"] + (tr["w"] - bm.size[0]) // 2, "y": tr["y"] + (tr["h"] - bm.size[1]) // 2,
+                  "w": bm.size[0], "h": bm.size[1], "colours_in_source_image": bm_colours,
+                  "fill_direction": "left to right, width = round(w * boost / max_boost)"}
+
     layout = {
         "source": str(BG.relative_to(ROOT)),
         "size": list(img.size),
@@ -158,6 +171,7 @@ def main():
         "lamp_outlines": lamps,
         "scale_digits_left_to_right": digits,
         "boost_track": boost_track,
+        "boost_fill": boost_fill,
         "captions": captions,
         "screen_border": frame,
         "zone_counts": {
