@@ -158,7 +158,9 @@ def main():
     tr = boost_track[0]
     boost_fill = {"x": tr["x"] + (tr["w"] - bm.size[0]) // 2, "y": tr["y"] + (tr["h"] - bm.size[1]) // 2,
                   "w": bm.size[0], "h": bm.size[1], "colours_in_source_image": bm_colours,
-                  "fill_direction": "left to right, width = round(w * boost / max_boost)"}
+                  "fill_direction": "left to right, width = round(w * boost / max_boost)",
+                  "colour_rule": "always #00E0FF, no amber or red zones (owner decision); a full bar means full boost "
+                                 "(boost >= max_boost, a variable the owner sets later); empty at 0 PSI or vacuum"}
 
     layout = {
         "source": str(BG.relative_to(ROOT)),

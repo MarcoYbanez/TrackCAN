@@ -138,7 +138,7 @@ instance maps to which core on this chip.
   Lit colours: cyan `#00E0FF`, amber `#FFB300`, red `#FF1A1A` (one `#FF4014`). Zones: main bar 44/6/10, top bar 6/5/5.
 - **7 lamp outlines** (CEL, OIL, BAT, TMP, TC, CAN, GPS) at y=74, about 20 x 13 px, x = 10, 33, 56, 78, 101, 124, 147.
 - **Scale digits 0 to 9** at y=63, x = 10, 61, 112, 162, 213, 263, 314, 365, 415, 466.
-- **Boost track** 163 x 8 px at (308, 177). **Boost fill** (the slider `ui_B_Meter`, which can be deleted): flat cyan `#00E0FF`, 161 x 6 px, centred in the track at (309, 178); drawn left to right in proportion to boost, with the full bar equal to a maximum boost the owner sets later.
+- **Boost track** 163 x 8 px at (308, 177). **Boost fill** (the slider `ui_B_Meter`, which can be deleted): flat cyan `#00E0FF`, 161 x 6 px, centred in the track at (309, 178); drawn left to right in proportion to boost, with the full bar equal to a maximum boost the owner sets later. **Owner decision:** the boost bar stays one colour (cyan, no amber or red zones); a full bar means full boost; vacuum shows an empty bar and the negative number in the readout.
 - **Captions:** RPM (412,85), SPEED (10,99), BOOST (308,99), **BAR** (308,158), MPH (10,209).
 - The lit segments are drawn exactly on the off segments, so the background can also be recreated from this file.
 - **Lit pixels, stored exactly** (`lit_x0`, `lit_columns`, `lit_base_row` per segment): a lit segment is a stripe

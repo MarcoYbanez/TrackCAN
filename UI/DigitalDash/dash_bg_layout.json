@@ -3240,7 +3240,8 @@
   "colours_in_source_image": [
    "#00E0FF"
   ],
-  "fill_direction": "left to right, width = round(w * boost / max_boost)"
+  "fill_direction": "left to right, width = round(w * boost / max_boost)",
+  "colour_rule": "always #00E0FF, no amber or red zones (owner decision); a full bar means full boost (boost >= max_boost, a variable the owner sets later); empty at 0 PSI or vacuum"
  },
  "captions": [
   {
