@@ -9,6 +9,8 @@
  *******************************************************/
 #include "dash_view.h"
 
+#include "dash_thresholds.h"
+
 #include <stddef.h>
 
 /*******************************************************
@@ -46,8 +48,14 @@ void dash_config_defaults(dash_config_t *cfg)
     cfg->shift_flash_rpm = 8500;
     cfg->boost_max_psi_x10 = 200; /* PLACEHOLDER: 20.0 PSI, the owner sets the real maximum */
     limits_none(&cfg->coolant_degf_x10);
+    cfg->coolant_degf_x10.warn_high = DASH_COOLANT_HIGH_X10;
+    cfg->coolant_degf_x10.hysteresis = DASH_COOLANT_HYST_X10;
     limits_none(&cfg->oil_temp_degf_x10);
+    cfg->oil_temp_degf_x10.warn_high = DASH_OIL_TEMP_HIGH_X10;
+    cfg->oil_temp_degf_x10.hysteresis = DASH_OIL_TEMP_HYST_X10;
     limits_none(&cfg->oil_pressure_psi_x10);
+    cfg->oil_pressure_psi_x10.warn_low = DASH_OIL_PRESSURE_LOW_X10;
+    cfg->oil_pressure_psi_x10.hysteresis = DASH_OIL_PRESSURE_HYST_X10;
     limits_none(&cfg->battery_volts_x10);
     limits_none(&cfg->fuel_pct_x10);
 }

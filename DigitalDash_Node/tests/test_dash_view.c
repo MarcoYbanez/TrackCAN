@@ -155,20 +155,63 @@ static void test_unset_limits_never_warn(void)
     dash_config_t c;
 
     dash_config_defaults(&c);
-    /* With no limits set a good value is normal, extreme values do not overflow or flip levels. */
-    CHECK(dash_box_level(true, 0, &c.coolant_degf_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_NORMAL);
-    CHECK(dash_box_level(true, INT32_MAX - 1, &c.coolant_degf_x10, DASH_LEVEL_ALERT) ==
+    /* Battery has no limit: a good value is normal, extreme values do not overflow or flip levels.
+     */
+    CHECK(dash_box_level(true, 0, &c.battery_volts_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_NORMAL);
+    CHECK(dash_box_level(true, INT32_MAX - 1, &c.battery_volts_x10, DASH_LEVEL_ALERT) ==
           DASH_LEVEL_NORMAL);
-    CHECK(dash_box_level(true, INT32_MIN + 1, &c.coolant_degf_x10, DASH_LEVEL_ALERT) ==
+    CHECK(dash_box_level(true, INT32_MIN + 1, &c.battery_volts_x10, DASH_LEVEL_ALERT) ==
           DASH_LEVEL_NORMAL);
+    CHECK(dash_box_level(true, 5, &c.fuel_pct_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_NORMAL);
 
     /* Only one side set: the other side stays unlimited. */
-    c.oil_pressure_psi_x10.warn_low = 200;
-    c.oil_pressure_psi_x10.alert_low = 100;
-    CHECK(dash_box_level(true, 5000, &c.oil_pressure_psi_x10, DASH_LEVEL_NORMAL) ==
-          DASH_LEVEL_NORMAL);
+    c.battery_volts_x10.warn_low = 200;
+    c.battery_volts_x10.alert_low = 100;
+    CHECK(dash_box_level(true, 5000, &c.battery_volts_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_NORMAL);
+    CHECK(dash_box_level(true, 150, &c.battery_volts_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_WARNING);
+}
+
+static void test_owner_thresholds(void)
+{
+    dash_config_t c;
+    dash_level_t lv;
+
+    dash_config_defaults(&c);
+
+    /* Oil pressure: red below 15 psi, one fixed limit. Values are tenths of psi. */
     CHECK(dash_box_level(true, 150, &c.oil_pressure_psi_x10, DASH_LEVEL_NORMAL) ==
+          DASH_LEVEL_NORMAL);
+    CHECK(dash_box_level(true, 149, &c.oil_pressure_psi_x10, DASH_LEVEL_NORMAL) ==
           DASH_LEVEL_WARNING);
+    CHECK(dash_box_level(true, 0, &c.oil_pressure_psi_x10, DASH_LEVEL_NORMAL) ==
+          DASH_LEVEL_WARNING);
+    CHECK(dash_box_level(true, 800, &c.oil_pressure_psi_x10, DASH_LEVEL_NORMAL) ==
+          DASH_LEVEL_NORMAL);
+    lv = dash_box_level(true, 140, &c.oil_pressure_psi_x10, DASH_LEVEL_NORMAL);
+    lv = dash_box_level(true, 155, &c.oil_pressure_psi_x10, lv); /* 15.5 psi: not back far enough */
+    CHECK(lv == DASH_LEVEL_WARNING);
+    lv = dash_box_level(true, 160, &c.oil_pressure_psi_x10, lv); /* 16.0 psi: cleared */
+    CHECK(lv == DASH_LEVEL_NORMAL);
+
+    /* Coolant: red at 220 F. */
+    CHECK(dash_box_level(true, 2199, &c.coolant_degf_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_NORMAL);
+    CHECK(dash_box_level(true, 2200, &c.coolant_degf_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_WARNING);
+    CHECK(dash_box_level(true, 1000, &c.coolant_degf_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_NORMAL);
+    lv = dash_box_level(true, 2205, &c.coolant_degf_x10, DASH_LEVEL_NORMAL);
+    lv = dash_box_level(true, 2190, &c.coolant_degf_x10,
+                        lv); /* 219 F: still inside the 2 F margin */
+    CHECK(lv == DASH_LEVEL_WARNING);
+    lv = dash_box_level(true, 2170, &c.coolant_degf_x10, lv);
+    CHECK(lv == DASH_LEVEL_NORMAL);
+
+    /* Oil temperature: red at 235 F. */
+    CHECK(dash_box_level(true, 2349, &c.oil_temp_degf_x10, DASH_LEVEL_NORMAL) == DASH_LEVEL_NORMAL);
+    CHECK(dash_box_level(true, 2350, &c.oil_temp_degf_x10, DASH_LEVEL_NORMAL) ==
+          DASH_LEVEL_WARNING);
+
+    /* Missing data is still no data, whatever the limits are. */
+    CHECK(dash_box_level(false, 0, &c.oil_pressure_psi_x10, DASH_LEVEL_NORMAL) ==
+          DASH_LEVEL_NO_DATA);
 }
 
 static void test_box_fit(void)
@@ -204,6 +247,7 @@ int main(void)
     test_lamps();
     test_box_levels();
     test_unset_limits_never_warn();
+    test_owner_thresholds();
     test_box_fit();
     test_speed_units();
 

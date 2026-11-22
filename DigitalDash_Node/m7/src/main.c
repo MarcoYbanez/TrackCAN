@@ -37,8 +37,10 @@ LOG_MODULE_REGISTER(dash_m7, LOG_LEVEL_INF);
 #define READ_PERIOD_MS 50
 #define SHIFT_FLASH_MS 125 /* flash half period */
 
-#define LIGHT_CHECK_ENGINE 0x01u
-#define LIGHT_OIL_WARNING 0x02u
+#define LIGHT_CHECK_ENGINE 0x0001u
+#define LIGHT_OIL_WARNING 0x0002u
+#define LIGHT_FUEL_LOW 0x0020u
+#define LIGHT_CHARGE_WARNING 0x0100u
 
 /* Bar canvases: ARGB8888, transparent where a segment is dark. */
 LV_DRAW_BUF_DEFINE_STATIC(l_main_buf, 461, 39, LV_COLOR_FORMAT_ARGB8888);
@@ -203,6 +205,12 @@ static void show_snapshot(const dash_snapshot_t *s)
                                      &l_cfg.oil_pressure_psi_x10, l_lvl_oil_press);
     l_lvl_fuel =
         dash_box_level(analog, (int32_t)d->fuel_level_pct_x10, &l_cfg.fuel_pct_x10, l_lvl_fuel);
+    /* The car's own low-fuel lamp (read through an opto-coupler) turns the fuel box red. It already
+     * includes the ECM's debounce and the factory refill hysteresis, so no percent limit is added
+     * on top. */
+    if (lights && (d->lights & LIGHT_FUEL_LOW)) {
+        l_lvl_fuel = DASH_LEVEL_ALERT;
+    }
     show_box(ui_Coolant, ui_Coolant_Overlay, analog, coolant, 999, "%d", l_lvl_coolant);
     show_box(ui_Oil_Temp, ui_Oil_Temp_Overlay, analog, oil_temp, 999, "%d", l_lvl_oil_temp);
     show_box(ui_Oil_Pressure, ui_Oil_Pressure_Overlay, analog, oil_press, 999, "%d",
@@ -218,10 +226,11 @@ static void show_snapshot(const dash_snapshot_t *s)
     set_user_state(ui_Boost_Label, 0);
     lv_obj_add_flag(l_boost_fill, LV_OBJ_FLAG_HIDDEN);
 
-    /* Lamps: only the two with a CAN source. The others stay dim (no data). */
+    /* Lamps: the ones with a CAN source (the car's own lamps through opto-couplers). The others
+     * stay dim. */
     show_lamp(ui_CEL_REG, dash_lamp(lights, lights && (d->lights & LIGHT_CHECK_ENGINE)));
     show_lamp(ui_OIL_REG, dash_lamp(lights, lights && (d->lights & LIGHT_OIL_WARNING)));
-    show_lamp(ui_BAT_REG, DASH_LAMP_NOT_LIT);
+    show_lamp(ui_BAT_REG, dash_lamp(lights, lights && (d->lights & LIGHT_CHARGE_WARNING)));
     show_lamp(ui_TMP_REG, DASH_LAMP_NOT_LIT);
     show_lamp(ui_TCC_REG, DASH_LAMP_NOT_LIT);
     show_lamp(ui_CAN_REG, DASH_LAMP_NOT_LIT);

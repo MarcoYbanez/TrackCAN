@@ -5,8 +5,7 @@
  *
  * Hardware and LVGL independent, so every rule is tested on the host. Every threshold lives in
  * dash_config_t, a set of VARIABLES the owner can change after real driving experience (TCAN-5).
- * The defaults below are not engine limits: warning limits are unset (no warning) until real,
- * sourced values are chosen.
+ * The limits come from dash_thresholds.h.
  *
  * Rules that never change:
  *  - Missing or stale data is never shown as normal: a box shows NO DATA, a lamp is dimmed.
@@ -78,7 +77,8 @@ typedef struct {
  * Public Function Prototypes
  *******************************************************/
 
-/* Defaults: the scale and shift range from the design, no gauge limits (never a warning). */
+/* Defaults: the scale and shift range from the design, and the gauge limits in dash_thresholds.h.
+ * Battery and fuel have no limit here (the car's own lamps drive them). */
 void dash_config_defaults(dash_config_t *cfg);
 
 /* Segments lit on the main bar: round(rpm * 60 / full scale), 0 to 60. */

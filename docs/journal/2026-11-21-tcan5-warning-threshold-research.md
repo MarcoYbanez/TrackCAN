@@ -100,3 +100,24 @@ owner approves. "n/a" means no sourced value.
 
 - Nothing was read from the 2002 JDM service manual (not available). The JDM and US ECU fan tables were not compared.
 - No threshold was written to firmware. TCAN-5 phase 1 needs the answers above first.
+
+## Owner decisions (2026-11-21, after reading the above)
+
+| Box | Decision | Implemented as |
+|---|---|---|
+| Oil pressure | One fixed limit: red below **15 psi** (not rpm-dependent) | `DASH_OIL_PRESSURE_LOW_X10 149` (red at 14.9 psi or less), clears at 16.0 psi |
+| Coolant | Red at **220 F** | `DASH_COOLANT_HIGH_X10 2200`, clears below 218 F |
+| Oil temperature | Red at **235 F** (the figure motorsport forums use; no factory source) | `DASH_OIL_TEMP_HIGH_X10 2350`, clears below 233 F |
+| Battery | The car's own charge lamp, read through an opto-coupler, drives the BAT lamp. No voltage limit on the dash. | New CAN bit `ChargeWarning` (DataLogger_Lights byte 1 bit 0), message widened 1 to 2 bytes |
+| Fuel | The car's own low-fuel lamp (opto-coupler) turns the fuel box red. The level is the car's sensor, shown as percent. Tank 15.9 US gal (60.2 L), so the factory 9 L light is about 15 %. | Existing bit `FuelLow`; no percent limit on top, because the lamp already has the ECM's debounce and the factory 4.0 gal refill hysteresis |
+
+The hysteresis margins (1 psi, 2 F, 2 F) are my choice, not sourced.
+
+Known consequences to watch on the car:
+- **Oil pressure reads 0 with the key on and the engine stopped, so the box is red until the engine runs.** The car's own
+  oil lamp does the same. Gate it on rpm later if that is unwanted.
+- **A hot idle at the factory minimum (14 psi at 800 rpm) is below the 15 psi limit.** A healthy engine near the spec
+  minimum would show red at hot idle. Watch the real idle pressure and adjust `DASH_OIL_PRESSURE_LOW_X10`.
+- The lights message is now 2 bytes. A DataLogger still sending the old 1-byte frame is rejected by the new Dash (lamps
+  stay dim, fail closed); flash both. The dash layout tag moved to version 2.
+- The DataLogger must set `ChargeWarning` and `FuelLow` from the opto-coupler inputs (TCAN-4). Nothing sets them yet.
