@@ -18,6 +18,8 @@ option(DATALOGGER_CAN "Build the TrackCAN CAN logic" ON)
 
 target_sources(app PRIVATE
 	src/main.c
+	src/bootloader/bootloader_control.c
+	src/bootloader/bootloader_request.c
 )
 if(DATALOGGER_CAN)
 	target_sources(app PRIVATE
@@ -30,6 +32,7 @@ else()
 endif()
 target_include_directories(app PRIVATE
 	src/logger
+	src/bootloader
 	${TRACKCAN_PATH}/can
 	${TRACKCAN_PATH}/can/common
 	${TRACKCAN_PATH}/can/generated

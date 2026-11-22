@@ -1,4 +1,5 @@
 
+#include "bootloader_control.h"
 #include <stdio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -28,6 +29,9 @@ const struct spi_dt_spec eng_spi = SPI_DT_SPEC_GET(ENG_SPI, SPI_WORD_SET(8) | SP
 
 int main(void)
 {
+	if (bootloader_control_start() < 0) {
+		printf("USB bootloader request unavailable\n");
+	}
 #ifndef DATALOGGER_NO_SD
 	sd_logger_start(); /* the SD card logger runs in its own thread */
 #endif
