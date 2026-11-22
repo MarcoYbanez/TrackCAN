@@ -29,33 +29,13 @@ esac
 
 build() {
     west build -b teensy41 -d "$BUILD" "$ROOT/DataLogger_Node" -- \
-        -DTRACKCAN_PATH="$ROOT" -DPython3_EXECUTABLE="$VENV/bin/python" "${EXTRA[@]}"
+        -DTRACKCAN_PATH="$ROOT" -DPython3_EXECUTABLE="$VENV/bin/python" ${EXTRA[@]+"${EXTRA[@]}"}
 }
 
 flash() {
     command -v teensy_loader_cli >/dev/null || { echo "teensy_loader_cli not found (brew install teensy_loader_cli)"; exit 1; }
     # TCAN-18: a running image with USB is rebooted into the bootloader over USB; otherwise it asks for the PROGRAM button.
     "$ROOT/scripts/teensy_usb_flash.sh" "$BUILD/zephyr/zephyr.hex"
-}
-
-case "$VARIANT" in
-    full) BUILD="$ROOT/build/datalogger_sd" ;;
-    nosd) BUILD="$ROOT/build/datalogger_nosd"
-          EXTRA=(-DDATALOGGER_SD=OFF -DCONFIG_DISK_ACCESS=n -DCONFIG_FILE_SYSTEM=n -DCONFIG_FAT_FILESYSTEM_ELM=n) ;;
-    scaffold) BUILD="$ROOT/build/datalogger_scaffold"
-          EXTRA=(-DDATALOGGER_SD=OFF -DDATALOGGER_CAN=OFF -DCONFIG_CAN=n -DCONFIG_DISK_ACCESS=n -DCONFIG_FILE_SYSTEM=n -DCONFIG_FAT_FILESYSTEM_ELM=n) ;;
-    *) echo "variant must be full, nosd or scaffold"; exit 2 ;;
-esac
-
-build() {
-    west build -b teensy41 -d "$BUILD" "$ROOT/DataLogger_Node" -- \
-        -DTRACKCAN_PATH="$ROOT" -DPython3_EXECUTABLE="$VENV/bin/python" "${EXTRA[@]}"
-}
-
-flash() {
-    command -v teensy_loader_cli >/dev/null || { echo "teensy_loader_cli not found (brew install teensy_loader_cli)"; exit 1; }
-    echo "Plug the Teensy in by USB and press its PROGRAM BUTTON (next to the USB connector) now."
-    west flash -d "$BUILD" --runner teensy
 }
 
 case "${1:-}" in
