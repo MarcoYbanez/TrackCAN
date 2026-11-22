@@ -16,6 +16,7 @@
 #include <zephyr/kernel.h>
 
 #include "dash_shared.h"
+#include "dash_sim.h"
 #include "dash_xcore.h"
 
 /*******************************************************
@@ -31,8 +32,11 @@ int main(void)
     const struct device *const ipm = DEVICE_DT_GET(DT_NODELABEL(mailbox));
     dash_shared_t *const shared = dash_xcore_shared();
     uint32_t tick = 0;
+    dash_sim_t sim;
+    dash_sim_out_t drive;
 
     dash_xcore_clock_on();
+    dash_sim_init(&sim);
 
     /* The M7 may already be running: only touch the block while holding the semaphore. */
     while (!dash_xcore_lock()) {
@@ -49,35 +53,28 @@ int main(void)
         dash_snapshot_t snap;
 
         memset(&snap, 0, sizeof(snap));
-        /* M1 TEST VALUES, not real data. Everything sweeps so one flash checks the whole screen:
-         * the RPM bars (and the shift lights flashing near 8,500), a 3 digit speed, every gauge box
-         * across its red limit, and the lamps switching on and off. Each cycle takes a few seconds.
-         */
-        snap.rpm = (uint16_t)((tick * 45u) % 9500u);
-        snap.speed_kmh_x100 = (uint16_t)((tick * 11u) % 20000u);
+        /* DEMO DRIVE, not real data (dash_sim): gears, speed, boost, temperatures, lamps and
+         * faults. The real CAN values replace this in M2. Boost, battery, AFR and gear have no CAN
+         * source yet, so only the demo sets them. */
+        dash_sim_step(&sim, PUBLISH_PERIOD_MS, &drive);
+        snap.rpm = drive.rpm;
+        snap.speed_kmh_x100 = drive.speed_kmh_x100;
+        snap.gear = drive.gear;
+        snap.boost_psi_x10 = drive.boost_psi_x10;
+        snap.battery_volts_x10 = drive.battery_volts_x10;
+        snap.afr_x10 = drive.afr_x10;
+        snap.extra_valid = DASH_EXTRA_BOOST | DASH_EXTRA_BATTERY | DASH_EXTRA_AFR | DASH_EXTRA_GEAR;
 
         snap.display.analog_state = TCAN_RX_FRESH;
-        snap.display.oil_pressure_psi_x10 = (tick * 3u) % 800u; /* 0 to 80 psi, red below 15 */
-        snap.display.oil_temp_degf_x10 =
-            (int32_t)(2000u + (tick * 4u) % 500u); /* 200 to 250 F, red at 235 */
-        snap.display.coolant_temp_degf_x10 =
-            (int32_t)(1800u + (tick * 5u) % 600u); /* 180 to 240 F, red at 220 */
-        snap.display.fuel_level_pct_x10 = (uint16_t)(1000u - (tick * 2u) % 1000u);
-
+        snap.display.oil_pressure_psi_x10 = drive.oil_pressure_psi_x10;
+        snap.display.oil_temp_degf_x10 = drive.oil_temp_degf_x10;
+        snap.display.coolant_temp_degf_x10 = drive.coolant_degf_x10;
+        snap.display.fuel_level_pct_x10 = drive.fuel_pct_x10;
         snap.display.ethanol_state = TCAN_RX_FRESH;
         snap.display.ethanol_pct = 85;
         snap.display.ethanol_alert = false;
-
         snap.display.lights_state = TCAN_RX_FRESH;
-        {
-            uint32_t phase = (tick / 75u) & 0xFu; /* a new combination every 1.5 s */
-
-            snap.display.lights =
-                (uint16_t)(((phase & 1u) ? 0x0001u : 0u) | /* check engine */
-                           ((phase & 2u) ? 0x0002u : 0u) | /* oil warning */
-                           ((phase & 4u) ? 0x0020u : 0u) | /* low fuel: fuel box red */
-                           ((phase & 8u) ? 0x0100u : 0u)); /* charge warning */
-        }
+        snap.display.lights = drive.lights;
 
         if (dash_xcore_lock()) {
             dash_shared_write(shared, &snap);

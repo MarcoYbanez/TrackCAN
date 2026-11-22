@@ -11,6 +11,7 @@ endif()
 target_sources(app PRIVATE
     src/main.c
     ../shared/dash_shared.c
+    ../shared/dash_sim.c
     ${TRACKCAN_PATH}/can/dash.c
     ${TRACKCAN_PATH}/can/dash_port_stm32h7.c
     ${TRACKCAN_PATH}/can/common/trackcan_core.c

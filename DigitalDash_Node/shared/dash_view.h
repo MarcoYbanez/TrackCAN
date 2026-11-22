@@ -18,6 +18,7 @@
  * Includes
  *******************************************************/
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /*******************************************************
@@ -103,6 +104,10 @@ dash_level_t dash_box_level(bool data_valid, int32_t value, const dash_limits_t 
 /* True when a value prints in a 3 character gauge box (-99 .. max_value). Anything else shows "--".
  */
 bool dash_box_value_fits(int32_t value, int32_t max_value);
+
+/* Writes a tenths value as text ("14.2", "-8.5"). Returns false and writes "--" if the text is
+ * longer than max_chars (it would wrap in its box) or the buffer is too small. */
+bool dash_fmt_tenths(char *buf, size_t size, int32_t v_x10, size_t max_chars);
 
 /* km/h in hundredths to mph in tenths, rounded. */
 uint32_t dash_kmh_x100_to_mph_x10(uint32_t kmh_x100);

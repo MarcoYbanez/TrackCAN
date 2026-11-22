@@ -7,6 +7,7 @@
  * Includes
  *******************************************************/
 #include <stdio.h>
+#include <string.h>
 
 #include "dash_view.h"
 
@@ -226,6 +227,27 @@ static void test_box_fit(void)
     CHECK(!dash_box_value_fits(100, 99)); /* "E100" is 4 characters */
 }
 
+static void test_fmt_tenths(void)
+{
+    char b[12];
+
+    CHECK(dash_fmt_tenths(b, sizeof(b), -85, 5) && strcmp(b, "-8.5") == 0);
+    CHECK(dash_fmt_tenths(b, sizeof(b), 142, 4) && strcmp(b, "14.2") == 0);
+    CHECK(dash_fmt_tenths(b, sizeof(b), 5, 4) && strcmp(b, "0.5") == 0);
+    CHECK(dash_fmt_tenths(b, sizeof(b), -5, 5) && strcmp(b, "-0.5") == 0);
+    CHECK(dash_fmt_tenths(b, sizeof(b), 0, 4) && strcmp(b, "0.0") == 0);
+    CHECK(dash_fmt_tenths(b, sizeof(b), -145, 5) && strcmp(b, "-14.5") == 0);
+    CHECK(dash_fmt_tenths(b, sizeof(b), 220, 4) && strcmp(b, "22.0") == 0);
+
+    /* Too long for the box: "--" and false. */
+    CHECK(!dash_fmt_tenths(b, sizeof(b), 1000, 4) &&
+          strcmp(b, "--") == 0); /* "100.0" is 5 characters */
+    CHECK(!dash_fmt_tenths(b, sizeof(b), -145, 4) &&
+          strcmp(b, "--") == 0);                         /* "-14.5" is 5 characters */
+    CHECK(!dash_fmt_tenths(b, sizeof(b), INT32_MIN, 5)); /* no overflow on the most negative */
+    CHECK(!dash_fmt_tenths(b, 2, 5, 4));                 /* a buffer that is too small */
+}
+
 static void test_speed_units(void)
 {
     /* 1 km/h = 0.621371 mph; result in tenths of mph. */
@@ -249,6 +271,7 @@ int main(void)
     test_unset_limits_never_warn();
     test_owner_thresholds();
     test_box_fit();
+    test_fmt_tenths();
     test_speed_units();
 
     printf("%d checks, %d failures\n", l_checks, l_failures);

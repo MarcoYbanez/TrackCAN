@@ -12,6 +12,8 @@
 #include "dash_thresholds.h"
 
 #include <stddef.h>
+#include <stdio.h>
+#include <string.h>
 
 /*******************************************************
  * Static Function Definitions
@@ -146,6 +148,23 @@ dash_level_t dash_box_level(bool data_valid, int32_t value, const dash_limits_t 
 bool dash_box_value_fits(int32_t value, int32_t max_value)
 {
     return value >= -99 && value <= max_value;
+}
+
+bool dash_fmt_tenths(char *buf, size_t size, int32_t v_x10, size_t max_chars)
+{
+    uint32_t a = (v_x10 < 0) ? (uint32_t)(-(int64_t)v_x10) : (uint32_t)v_x10;
+    int n;
+
+    if (size < 3) {
+        return false;
+    }
+    n = snprintf(buf, size, "%s%u.%u", (v_x10 < 0) ? "-" : "", (unsigned)(a / 10u),
+                 (unsigned)(a % 10u));
+    if (n < 0 || (size_t)n >= size || strlen(buf) > max_chars) {
+        (void)snprintf(buf, size, "--");
+        return false;
+    }
+    return true;
 }
 
 uint32_t dash_kmh_x100_to_mph_x10(uint32_t kmh_x100)

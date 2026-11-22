@@ -61,6 +61,7 @@ static dash_config_t l_cfg; /* the warning thresholds: variables, see dash_view.
 /* Last level shown per gauge box, for hysteresis. */
 static dash_level_t l_lvl_coolant, l_lvl_oil_temp, l_lvl_oil_press, l_lvl_fuel;
 
+static uint32_t l_last_log_s;
 static volatile uint32_t l_signals; /* counts the M4's "new snapshot" signals */
 
 /*******************************************************
@@ -137,20 +138,46 @@ static void set_user_state(lv_obj_t *o, int n)
     }
 }
 
-/* A gauge box (3 characters wide): the value as text, and the red tint on the label and its tile
- * when out of range. A value that does not fit shows "--" rather than wrapping onto a second line.
- */
-static void show_box(lv_obj_t *label, lv_obj_t *tile, bool valid, int32_t value, int32_t max_value,
-                     const char *fmt, dash_level_t lvl)
+/* A gauge box: the text (NULL means no data) and the red tint on the label and its tile when out of
+ * range. Anything that is not live shows "--", never a number. */
+static void show_box_text(lv_obj_t *label, lv_obj_t *tile, const char *text, dash_level_t lvl)
 {
-    if (valid && dash_box_value_fits(value, max_value)) {
-        lv_label_set_text_fmt(label, fmt, (int)value);
+    if (text != NULL) {
+        lv_label_set_text(label, text);
     } else {
-        lv_label_set_text(label, "--"); /* never a number that is not live */
+        lv_label_set_text(label, "--");
         lvl = DASH_LEVEL_NO_DATA;
     }
     set_user_state(label, lvl >= DASH_LEVEL_WARNING ? 1 : 0);
     set_user_state(tile, lvl >= DASH_LEVEL_WARNING ? 1 : 0);
+}
+
+/* A whole number in a 3 character box (-99 .. max_value): a value that does not fit shows "--"
+ * instead of wrapping. */
+static void show_box(lv_obj_t *label, lv_obj_t *tile, bool valid, int32_t value, int32_t max_value,
+                     const char *fmt, dash_level_t lvl)
+{
+    char txt[8];
+
+    if (valid && dash_box_value_fits(value, max_value)) {
+        lv_snprintf(txt, sizeof(txt), fmt, (int)value);
+        show_box_text(label, tile, txt, lvl);
+    } else {
+        show_box_text(label, tile, NULL, DASH_LEVEL_NO_DATA);
+    }
+}
+
+/* A tenths value ("14.2") in a box that holds max_chars characters. */
+static void show_tenths(lv_obj_t *label, lv_obj_t *tile, bool valid, int32_t v_x10,
+                        size_t max_chars)
+{
+    char txt[12];
+
+    if (valid && dash_fmt_tenths(txt, sizeof(txt), v_x10, max_chars)) {
+        show_box_text(label, tile, txt, DASH_LEVEL_NORMAL);
+    } else {
+        show_box_text(label, tile, NULL, DASH_LEVEL_NO_DATA);
+    }
 }
 
 static void show_lamp(lv_obj_t *lamp, dash_lamp_t st)
@@ -219,12 +246,36 @@ static void show_snapshot(const dash_snapshot_t *s)
     show_box(ui_Ethanol, ui_Ethanol_Overlay, eth, d->ethanol_pct, 99, "E%d",
              eth ? DASH_LEVEL_NORMAL : DASH_LEVEL_NO_DATA);
 
-    /* Not on the CAN network yet (TCAN-4): shown as no data, never as a made-up number. */
-    show_box(ui_Battery, ui_Battery_Overlay, false, 0, 999, "%d", DASH_LEVEL_NO_DATA);
-    show_box(ui_AFR, ui_AFR_Overlay, false, 0, 999, "%d", DASH_LEVEL_NO_DATA);
-    lv_label_set_text(ui_Boost_Label, "--");
-    set_user_state(ui_Boost_Label, 0);
-    lv_obj_add_flag(l_boost_fill, LV_OBJ_FLAG_HIDDEN);
+    /* Battery, AFR and boost have no CAN source yet (TCAN-4): the M4 marks them valid only in the
+     * demo drive, otherwise they show "--". */
+    show_tenths(ui_Battery, ui_Battery_Overlay, (s->extra_valid & DASH_EXTRA_BATTERY) != 0,
+                s->battery_volts_x10, 4);
+    show_tenths(ui_AFR, ui_AFR_Overlay, (s->extra_valid & DASH_EXTRA_AFR) != 0, s->afr_x10, 4);
+    {
+        char txt[12];
+        bool ok = (s->extra_valid & DASH_EXTRA_BOOST) != 0 &&
+                  dash_fmt_tenths(txt, sizeof(txt), s->boost_psi_x10, 5);
+        uint16_t px = ok ? dash_boost_fill_px(s->boost_psi_x10, &l_cfg) : 0;
+
+        lv_label_set_text(ui_Boost_Label, ok ? txt : "--");
+        set_user_state(ui_Boost_Label, 0);
+        if (px > 0) {
+            lv_obj_set_width(l_boost_fill, px);
+            lv_obj_remove_flag(l_boost_fill, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(l_boost_fill, LV_OBJ_FLAG_HIDDEN);
+        }
+    }
+
+    /* Once a second the serial console shows what the demo is doing, to compare with the screen. */
+    if ((k_uptime_get_32() / 1000u) != l_last_log_s) {
+        l_last_log_s = k_uptime_get_32() / 1000u;
+        LOG_INF("gear %u  %u rpm  %u mph  boost %d.%d psi",
+                (unsigned)((s->extra_valid & DASH_EXTRA_GEAR) ? s->gear : 0), (unsigned)s->rpm,
+                (unsigned)(dash_kmh_x100_to_mph_x10(s->speed_kmh_x100) / 10u),
+                (int)(s->boost_psi_x10 / 10),
+                (int)(s->boost_psi_x10 < 0 ? -(s->boost_psi_x10 % 10) : s->boost_psi_x10 % 10));
+    }
 
     /* Lamps: the ones with a CAN source (the car's own lamps through opto-couplers). The others
      * stay dim. */

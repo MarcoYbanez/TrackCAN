@@ -14,6 +14,7 @@ set(DASH_SHARED_DIR ${CMAKE_CURRENT_LIST_DIR}/../shared)
 add_library(dash_shared STATIC
     ${DASH_SHARED_DIR}/dash_shared.c
     ${DASH_SHARED_DIR}/dash_view.c
+    ${DASH_SHARED_DIR}/dash_sim.c
     ${DASH_SHARED_DIR}/dash_geometry.c
     ${DASH_SHARED_DIR}/dash_render.c
     ${TRACKCAN_PATH}/can/dash.c
@@ -47,3 +48,8 @@ target_link_libraries(test_dash_render PRIVATE dash_shared)
 target_include_directories(test_dash_render PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_compile_options(test_dash_render PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
 add_test(NAME dash_render COMMAND test_dash_render)
+
+add_executable(test_dash_sim test_dash_sim.c)
+target_link_libraries(test_dash_sim PRIVATE dash_shared)
+target_compile_options(test_dash_sim PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
+add_test(NAME dash_sim COMMAND test_dash_sim)

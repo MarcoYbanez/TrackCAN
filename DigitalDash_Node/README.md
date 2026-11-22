@@ -38,7 +38,17 @@ Host tests for the exchange:
 cmake -S DigitalDash_Node/tests -B build/dash_tests && cmake --build build/dash_tests && ./build/dash_tests/test_dash_shared
 ```
 
-## Flashing (untested)
+## Demo drive (until real CAN data arrives)
+
+The M4 image runs `shared/dash_sim.c`: a repeating ~44 s loop of idle, full-throttle pulls through 1st to 5th gear,
+cruising and braking, with boost, AFR, battery, temperatures, oil pressure, fuel and lamps that go with it. Loop 2
+(about 90 s in) injects an oil pressure sag, loop 3 a charging fault and a check engine lamp; the pattern repeats
+every 3 loops. The values are a plausible model, not measurements. Boost, battery, AFR and gear have no CAN source
+yet (TCAN-4): only the demo marks them valid, so with real data they show "--". The M7 console (ST-LINK USB serial,
+115200 baud) prints the gear, rpm, speed and boost once a second to compare with the screen. The design has no gear
+indicator, so gear is only in that log.
+
+## Flashing
 
 Zephyr's default runner for this board is STM32CubeProgrammer, which is not installed here. The board
 documentation also allows OpenOCD. Each core is flashed separately (M7 at 0x08000000, M4 at
