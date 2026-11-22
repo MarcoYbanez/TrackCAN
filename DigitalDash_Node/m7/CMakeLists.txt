@@ -10,7 +10,17 @@ endif()
 target_sources(app PRIVATE
     src/main.c
     ../shared/dash_shared.c
+    ../shared/dash_view.c
+    ../shared/dash_geometry.c
+    ../shared/dash_render.c
 )
+
+# The SquareLine export (images, fonts, screen). Re-export over it and rebuild: nothing here is hand-edited.
+set(UI_DIR ${TRACKCAN_PATH}/UI/DigitalDash_480x272/lvgl9_export)
+file(GLOB UI_SRC ${UI_DIR}/*.c ${UI_DIR}/screens/*.c ${UI_DIR}/components/*.c
+     ${UI_DIR}/images/*.c ${UI_DIR}/fonts/*.c)
+target_sources(app PRIVATE ${UI_SRC})
+target_include_directories(app PRIVATE ${UI_DIR} ${CMAKE_CURRENT_LIST_DIR}/shim)
 target_include_directories(app PRIVATE
     ../shared
     ../common

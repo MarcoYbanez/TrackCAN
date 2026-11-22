@@ -1,9 +1,13 @@
 /*******************************************************
  * @file main.c
- * @brief Dash, M7 core: the display. Reads the snapshot the M4 publishes and draws it.
+ * @brief Dash, M7 core: the display. Reads the snapshot the M4 publishes and draws it on the
+ *        SquareLine screen.
  *
  * Fail closed: if the M4 is missing or its heartbeat stops, the screen shows a big alert. It never
- * keeps showing old numbers as if they were live.
+ * keeps showing old numbers as if they were live. Missing data shows "--", never a number.
+ *
+ * What is shown is decided by dash_view (tested on the host). The RPM bars are drawn by dash_render
+ * from the saved geometry into transparent canvases laid over the background image.
  *******************************************************/
 
 /*******************************************************
@@ -18,8 +22,11 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
+#include "dash_render.h"
 #include "dash_shared.h"
+#include "dash_view.h"
 #include "dash_xcore.h"
+#include "ui.h"
 
 LOG_MODULE_REGISTER(dash_m7, LOG_LEVEL_INF);
 
@@ -28,16 +35,29 @@ LOG_MODULE_REGISTER(dash_m7, LOG_LEVEL_INF);
  *******************************************************/
 #define UI_PERIOD_MS 20
 #define READ_PERIOD_MS 50
+#define SHIFT_FLASH_MS 125 /* flash half period */
+
+#define LIGHT_CHECK_ENGINE 0x01u
+#define LIGHT_OIL_WARNING 0x02u
+
+/* Bar canvases: ARGB8888, transparent where a segment is dark. */
+LV_DRAW_BUF_DEFINE_STATIC(l_main_buf, 461, 39, LV_COLOR_FORMAT_ARGB8888);
+LV_DRAW_BUF_DEFINE_STATIC(l_top_buf, 461, 9, LV_COLOR_FORMAT_ARGB8888);
 
 /*******************************************************
  * Static Variables
  *******************************************************/
-static lv_obj_t *l_title;
-static lv_obj_t *l_rpm;
-static lv_obj_t *l_speed;
-static lv_obj_t *l_ethanol;
-static lv_obj_t *l_link;
+static lv_obj_t *l_main_canvas;
+static lv_obj_t *l_top_canvas;
+static lv_obj_t *l_boost_fill;
 static lv_obj_t *l_alert; /* full-screen alert, hidden until needed */
+
+static uint8_t l_main_lit;
+static uint8_t l_top_lit;
+static dash_config_t l_cfg; /* the warning thresholds: variables, see dash_view.h */
+
+/* Last level shown per gauge box, for hysteresis. */
+static dash_level_t l_lvl_coolant, l_lvl_oil_temp, l_lvl_oil_press, l_lvl_fuel;
 
 static volatile uint32_t l_signals; /* counts the M4's "new snapshot" signals */
 
@@ -53,37 +73,36 @@ static void ipm_cb(const struct device *dev, void *user_data, uint32_t id, volat
     l_signals++; /* nothing is drawn here: it is only a wake-up hint */
 }
 
+static lv_obj_t *bar_canvas(lv_draw_buf_t *buf, const dash_bar_t *bar, uint8_t *lit)
+{
+    lv_obj_t *c = lv_canvas_create(ui_Screen1);
+
+    lv_canvas_set_draw_buf(c, buf);
+    lv_obj_set_pos(c, bar->screen_x, bar->screen_y);
+    lv_obj_remove_flag(c, LV_OBJ_FLAG_CLICKABLE);
+    dash_bar_clear((uint32_t *)buf->data, buf->header.stride / 4u, bar, lit);
+    lv_obj_move_to_index(c, 1); /* above the background image, below every label and lamp */
+    return c;
+}
+
 static void ui_build(void)
 {
-    lv_obj_t *scr = lv_screen_active();
+    ui_init(); /* the SquareLine screen */
 
-    lv_obj_set_style_bg_color(scr, lv_color_hex(0x000000), 0);
+    l_main_canvas = bar_canvas(&l_main_buf, &dash_main_bar, &l_main_lit);
+    l_top_canvas = bar_canvas(&l_top_buf, &dash_top_bar, &l_top_lit);
 
-    l_title = lv_label_create(scr);
-    lv_label_set_text(l_title, "TrackCAN dash  (M1 test)");
-    lv_obj_set_style_text_color(l_title, lv_color_hex(0x808080), 0);
-    lv_obj_align(l_title, LV_ALIGN_TOP_LEFT, 8, 6);
-
-    l_rpm = lv_label_create(scr);
-    lv_obj_set_style_text_font(l_rpm, &lv_font_montserrat_48, 0);
-    lv_obj_set_style_text_color(l_rpm, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(l_rpm, LV_ALIGN_TOP_LEFT, 8, 40);
-
-    l_speed = lv_label_create(scr);
-    lv_obj_set_style_text_font(l_speed, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_color(l_speed, lv_color_hex(0xFFFFFF), 0);
-    lv_obj_align(l_speed, LV_ALIGN_TOP_LEFT, 8, 110);
-
-    l_ethanol = lv_label_create(scr);
-    lv_obj_set_style_text_font(l_ethanol, &lv_font_montserrat_28, 0);
-    lv_obj_set_style_text_color(l_ethanol, lv_color_hex(0x40C0FF), 0);
-    lv_obj_align(l_ethanol, LV_ALIGN_TOP_LEFT, 8, 160);
-
-    l_link = lv_label_create(scr);
-    lv_obj_align(l_link, LV_ALIGN_BOTTOM_LEFT, 8, -6);
+    l_boost_fill = lv_obj_create(ui_Screen1);
+    lv_obj_remove_style_all(l_boost_fill);
+    lv_obj_set_pos(l_boost_fill, DASH_BOOST_FILL_X, DASH_BOOST_FILL_Y);
+    lv_obj_set_size(l_boost_fill, 0, DASH_BOOST_FILL_H_PX);
+    lv_obj_set_style_bg_opa(l_boost_fill, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(l_boost_fill, lv_color_hex(DASH_BOOST_FILL_ARGB & 0xFFFFFFu), 0);
+    lv_obj_add_flag(l_boost_fill, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_to_index(l_boost_fill, 1);
 
     /* The alert covers everything. */
-    l_alert = lv_label_create(scr);
+    l_alert = lv_label_create(ui_Screen1);
     lv_obj_set_size(l_alert, LV_PCT(100), LV_PCT(100)); /* resolution independent */
     lv_obj_set_style_bg_opa(l_alert, LV_OPA_COVER, 0);
     lv_obj_set_style_bg_color(l_alert, lv_color_hex(0xC00000), 0);
@@ -103,6 +122,107 @@ static void ui_set_alert(bool on, const char *text)
     } else {
         lv_obj_add_flag(l_alert, LV_OBJ_FLAG_HIDDEN);
     }
+}
+
+/* Custom state n (1 or 2) on, the other off. n = 0 clears both. */
+static void set_user_state(lv_obj_t *o, int n)
+{
+    lv_obj_remove_state(o, LV_STATE_USER_1 | LV_STATE_USER_2);
+    if (n == 1) {
+        lv_obj_add_state(o, LV_STATE_USER_1);
+    } else if (n == 2) {
+        lv_obj_add_state(o, LV_STATE_USER_2);
+    }
+}
+
+/* A gauge box: the value as text, and the red tint on the label and its tile when out of range. */
+static void show_box(lv_obj_t *label, lv_obj_t *tile, bool valid, int32_t value, dash_level_t lvl)
+{
+    if (valid) {
+        lv_label_set_text_fmt(label, "%d", (int)value);
+    } else {
+        lv_label_set_text(label, "--"); /* never a number that is not live */
+    }
+    set_user_state(label, lvl >= DASH_LEVEL_WARNING ? 1 : 0);
+    set_user_state(tile, lvl >= DASH_LEVEL_WARNING ? 1 : 0);
+}
+
+static void show_lamp(lv_obj_t *lamp, dash_lamp_t st)
+{
+    if (st == DASH_LAMP_NOT_LIT) {
+        lv_obj_add_flag(lamp, LV_OBJ_FLAG_HIDDEN); /* the dim outline in the background shows */
+        return;
+    }
+    set_user_state(lamp, st == DASH_LAMP_ACTIVE ? 2 : 1);
+    lv_obj_remove_flag(lamp, LV_OBJ_FLAG_HIDDEN);
+}
+
+/* Draws one good snapshot. */
+static void show_snapshot(const dash_snapshot_t *s)
+{
+    const struct dash_display *d = &s->display;
+    bool analog = d->analog_state == TCAN_RX_FRESH;
+    bool lights = d->lights_state == TCAN_RX_FRESH;
+    bool eth = d->ethanol_state == TCAN_RX_FRESH;
+    int32_t oil_press = (int32_t)(d->oil_pressure_psi_x10 / 10u);
+    int32_t oil_temp = d->oil_temp_degf_x10 / 10;
+    int32_t coolant = d->coolant_temp_degf_x10 / 10;
+    int32_t fuel = (int32_t)(d->fuel_level_pct_x10 / 10u);
+
+    /* RPM bars. The engine values come from the M4's own timer, so they are fresh with the link. */
+    if (dash_bar_set_lit((uint32_t *)l_main_buf.data, l_main_buf.header.stride / 4u, &dash_main_bar,
+                         &l_main_lit, dash_main_lit(s->rpm, &l_cfg))) {
+        lv_obj_invalidate(l_main_canvas);
+    }
+    if (dash_bar_set_lit((uint32_t *)l_top_buf.data, l_top_buf.header.stride / 4u, &dash_top_bar,
+                         &l_top_lit, dash_top_lit(s->rpm, &l_cfg))) {
+        lv_obj_invalidate(l_top_canvas);
+    }
+    if (dash_top_flash(s->rpm, &l_cfg)) {
+        bool on = ((k_uptime_get_32() / SHIFT_FLASH_MS) & 1u) == 0u;
+
+        if (on) {
+            lv_obj_remove_flag(l_top_canvas, LV_OBJ_FLAG_HIDDEN);
+        } else {
+            lv_obj_add_flag(l_top_canvas, LV_OBJ_FLAG_HIDDEN);
+        }
+    } else {
+        lv_obj_remove_flag(l_top_canvas, LV_OBJ_FLAG_HIDDEN);
+    }
+
+    lv_label_set_text_fmt(ui_MPH_Label, "%u",
+                          (unsigned)(dash_kmh_x100_to_mph_x10(s->speed_kmh_x100) / 10u));
+
+    l_lvl_coolant = dash_box_level(analog, coolant, &l_cfg.coolant_degf_x10, l_lvl_coolant);
+    l_lvl_oil_temp = dash_box_level(analog, oil_temp, &l_cfg.oil_temp_degf_x10, l_lvl_oil_temp);
+    l_lvl_oil_press = dash_box_level(analog, (int32_t)d->oil_pressure_psi_x10,
+                                     &l_cfg.oil_pressure_psi_x10, l_lvl_oil_press);
+    l_lvl_fuel =
+        dash_box_level(analog, (int32_t)d->fuel_level_pct_x10, &l_cfg.fuel_pct_x10, l_lvl_fuel);
+    show_box(ui_Coolant, ui_Coolant_Overlay, analog, coolant, l_lvl_coolant);
+    show_box(ui_Oil_Temp, ui_Oil_Temp_Overlay, analog, oil_temp, l_lvl_oil_temp);
+    show_box(ui_Oil_Pressure, ui_Oil_Pressure_Overlay, analog, oil_press, l_lvl_oil_press);
+    show_box(ui_Gas_Level, ui_Fuel_Overlay, analog, fuel, l_lvl_fuel);
+    show_box(ui_Ethanol, ui_Ethanol_Overlay, eth, d->ethanol_pct,
+             eth ? DASH_LEVEL_NORMAL : DASH_LEVEL_NO_DATA);
+
+    /* Not on the CAN network yet (TCAN-4): shown as no data, never as a made-up number. */
+    show_box(ui_Battery, ui_Battery_Overlay, false, 0, DASH_LEVEL_NO_DATA);
+    show_box(ui_AFR, ui_AFR_Overlay, false, 0, DASH_LEVEL_NO_DATA);
+    lv_label_set_text(ui_Boost_Label, "--");
+    set_user_state(ui_Boost_Label, 0);
+    lv_obj_add_flag(l_boost_fill, LV_OBJ_FLAG_HIDDEN);
+
+    /* Lamps: only the two with a CAN source. The others stay dim (no data). */
+    show_lamp(ui_CEL_REG, dash_lamp(lights, lights && (d->lights & LIGHT_CHECK_ENGINE)));
+    show_lamp(ui_OIL_REG, dash_lamp(lights, lights && (d->lights & LIGHT_OIL_WARNING)));
+    show_lamp(ui_BAT_REG, DASH_LAMP_NOT_LIT);
+    show_lamp(ui_TMP_REG, DASH_LAMP_NOT_LIT);
+    show_lamp(ui_TCC_REG, DASH_LAMP_NOT_LIT);
+    show_lamp(ui_CAN_REG, DASH_LAMP_NOT_LIT);
+    show_lamp(ui_GPS_REG, DASH_LAMP_NOT_LIT);
+
+    ui_set_alert(d->ethanol_alert, "CHECK\nETHANOL");
 }
 
 /* Reads one consistent snapshot under the hardware semaphore. */
@@ -143,6 +263,9 @@ int main(void)
         ipm_set_enabled(ipm, 1);
     }
 
+    dash_config_defaults(&l_cfg);
+    LV_DRAW_BUF_INIT_STATIC(l_main_buf);
+    LV_DRAW_BUF_INIT_STATIC(l_top_buf);
     ui_build();
     display_blanking_off(display);
     dash_link_init(&link, k_uptime_get_32());
@@ -159,33 +282,17 @@ int main(void)
 
             if (r == DASH_READ_LAYOUT_MISMATCH) {
                 /* The two images were built from different layouts: never draw their data. */
-                lv_label_set_text(l_link, "firmware mismatch");
-                lv_obj_set_style_text_color(l_link, lv_color_hex(0xFF4040), 0);
                 ui_set_alert(true, "REFLASH\nBOTH CORES");
             } else if (state == DASH_LINK_UP) {
                 if (r == DASH_READ_OK) { /* only a good read changes the screen */
-                    lv_label_set_text_fmt(l_rpm, "%u rpm", (unsigned)snap.rpm);
-                    lv_label_set_text_fmt(l_speed, "%u.%02u km/h",
-                                          (unsigned)(snap.speed_kmh_x100 / 100u),
-                                          (unsigned)(snap.speed_kmh_x100 % 100u));
-                    lv_label_set_text_fmt(l_ethanol, "ethanol %u %%",
-                                          (unsigned)snap.display.ethanol_pct);
-                    lv_label_set_text_fmt(l_link, "M4 link up  hb %u  sig %u", (unsigned)heartbeat,
-                                          (unsigned)l_signals);
-                    lv_obj_set_style_text_color(l_link, lv_color_hex(0x40FF40), 0);
-                    ui_set_alert(snap.display.ethanol_alert, "CHECK\nETHANOL");
+                    show_snapshot(&snap);
                 }
                 /* A failed read keeps the last good screen until the link times out. */
-            } else if (state == DASH_LINK_WAITING) {
-                lv_label_set_text(l_link, "waiting for M4 ...");
-                lv_obj_set_style_text_color(l_link, lv_color_hex(0xFFC000), 0);
-                ui_set_alert(false, "");
-            } else {
-                /* Lost: never show stale numbers as live. */
-                lv_label_set_text(l_link, "M4 link LOST");
-                lv_obj_set_style_text_color(l_link, lv_color_hex(0xFF4040), 0);
+            } else if (state == DASH_LINK_LOST) {
+                /* Never show stale numbers as live. */
                 ui_set_alert(true, "NO DATA\nCAN CORE LOST");
             }
+            /* DASH_LINK_WAITING: the bars are empty and the boxes were never filled. */
         }
 
         lv_timer_handler();
