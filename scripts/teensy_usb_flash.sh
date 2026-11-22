@@ -11,7 +11,7 @@ PORT="${2:-}"
 [ -f "$HEX" ] || { echo "no hex file: $HEX"; exit 1; }
 
 if [ -z "$PORT" ]; then
-  PORT=$(ioreg -r -c IOUSBHostDevice -l -w0 | awk '/"USB Product Name" = "TrackCAN DataLogger"/{f=1} f&&/IOCalloutDevice/{gsub(/.*= "|"/,""); print; exit}')
+  PORT=$(ioreg -r -c IOUSBHostDevice -l -w0 | awk '/"USB Product Name" = "TrackCAN DataLogger"/{f=1} f&&/IOCalloutDevice/{gsub(/.*= "|"/,""); print; exit}' || true)  # || true: awk exits early, ioreg gets SIGPIPE, pipefail would abort
 fi
 
 if [ -n "$PORT" ]; then
