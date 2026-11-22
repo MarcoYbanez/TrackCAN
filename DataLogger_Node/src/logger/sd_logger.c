@@ -205,6 +205,30 @@ static int next_log_number(unsigned *number)
 	return 0;
 }
 
+/* Read-only diagnostic after a mount failure: sector count and the first sector's OEM name and signature, so the log says whether
+ * the card is exFAT ("EXFAT"), FAT ("MSDOS", "mkfs.fat") or unformatted (zeros), without ever writing to it. */
+static void log_card_identity(void)
+{
+	static uint8_t sector[512];
+	uint32_t count = 0;
+	char oem[9] = {0};
+
+	(void)disk_access_ioctl(DISK_NAME, DISK_IOCTL_GET_SECTOR_COUNT, &count);
+	if (disk_access_read(DISK_NAME, sector, 0, 1) != 0) {
+		LOG_ERR("card: %u sectors, sector 0 unreadable", (unsigned)count);
+		return;
+	}
+	for (int i = 0; i < 8; i++) {
+		oem[i] = (sector[3 + i] >= 32 && sector[3 + i] < 127) ? (char)sector[3 + i] : '.';
+	}
+	for (int i = 0; i < 4; i++) { /* MBR partition table: type byte and start LBA of each entry (type ee = GPT protective MBR) */
+		const uint8_t *e = &sector[446 + 16 * i];
+		LOG_ERR("card: partition %d type %02x start %u", i, e[4], (unsigned)(e[8] | e[9] << 8 | e[10] << 16 | (uint32_t)e[11] << 24));
+	}
+	LOG_ERR("card: %u sectors (%u MB), OEM \"%s\", sig %02x%02x, first bytes %02x %02x %02x", (unsigned)count,
+			(unsigned)(count / 2048u), oem, sector[510], sector[511], sector[0], sector[1], sector[2]);
+}
+
 /* Mounts the card and opens a new log file with the header written. Returns 0, or sets the state and returns an error. */
 static int open_log(void)
 {
@@ -225,6 +249,7 @@ static int open_log(void)
 	{
 		LOG_ERR("mount failed (%d): is the card FAT32?",
 				ret); /* exFAT and unformatted cards end up here: never formatted */
+		log_card_identity();
 		(void)disk_access_ioctl(DISK_NAME, DISK_IOCTL_CTRL_DEINIT, NULL);
 		set_state(SD_LOGGER_FS_ERROR);
 		return ret;
