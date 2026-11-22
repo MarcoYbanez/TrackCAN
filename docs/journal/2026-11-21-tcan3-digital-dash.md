@@ -99,6 +99,34 @@ independent watchdogs (IWDG1 for the M7, IWDG2 for the M4) are not built yet and
 milestone, because the dash is the owner's main way of seeing status. **[unverified]** which watchdog
 instance maps to which core on this chip.
 
+## Export findings (2026-11-21, after the owner's first SquareLine attempt)
+
+- **[verified]** The repo's `UI/DigitalDash/DigitalDash.slp` stores absolute export paths into the owner's old
+  working copy (`/Users/openinvite/Documents/DashProject/...`). The saved Project Export Root does not exist
+  there, which is the likely cause of the export error (the exact error text was not seen).
+- **[verified]** The export the owner made into `DashProject/UI/DigitalDash_LVGL9` is **SquareLine 1.6.3 with
+  LVGL 8.3.11**: the LVGL version setting was not changed to 9.x. Zephyr's LVGL is 9.5.0.
+- **[verified, measured from that export]** Assets total **3.89 MB** (94 images 3.79 MB, 3 fonts 0.10 MB), all
+  RGB565 with alpha. 61 frames of a 461x39 strip (3.3 MB) form the animated tachometer; one full-screen
+  480x272 background is 392 KB. Each Zephyr image gets a **1 MB** internal flash bank (`flash0`, `flash1`), and
+  the M7 image is already about 0.4 MB. As designed it does not fit: replace the frame animation with native LVGL
+  widgets, or store the images in external memory (the board has QSPI flash and eMMC; not investigated).
+
+### Second export (LVGL 9.5, after the owner fixed the paths)
+
+- **[verified]** `UI/DigitalDash_480x272/lvgl9_export/ui.h` says `LVGL version: 9.5`; images are now palette (I8)
+  format, so the assets total **1.45 MB** (was 3.89 MB): main tach 61 frames 1.11 MB, top strip 16 frames
+  0.08 MB, background 0.13 MB, 16 small images 0.04 MB, fonts 0.11 MB. Without the two tach strips: 0.27 MB.
+  The M7 bank has about 644 KB free, so only the 61-frame main tach is the blocker.
+- **[verified]** A scratch build of the export into the M7 app fails: `ui.c:87 redefinition of
+  'TopTach_Animation'`. The design has two animations with that name, plus an empty `TopTachometer_Animation`.
+- **[verified]** The exported code hard-codes `#include "lvgl/lvgl.h"` and ignores the Include Path setting.
+  Zephyr only provides `<lvgl.h>`, so the app needs a one-line shim header (`m7/shim/lvgl/lvgl.h`) instead of
+  editing the generated files, which are rewritten on every export.
+- **[verified]** The design's animations are self-running demo loops (frame counters), not driven by data.
+  The real tach must be set from the RPM value in code.
+- The design has labels for MPH, coolant, oil pressure and **AFR**; AFR is not in the CAN catalog yet.
+
 ## Risks and unknowns
 
 - **FDCAN on the M4 (M2):** the board devicetree enables FDCAN for the M7. For the M4 the peripheral must be

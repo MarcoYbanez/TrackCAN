@@ -4,20 +4,40 @@ Things only you can do. Claude cannot run SquareLine Studio, flash the board or 
 
 ## 1. Re-export the UI for the built-in display (480x272, LVGL 9)
 
-The design is `UI/DigitalDash/DigitalDash.spj`. The folder `UI/DigitalDash_480x272/` is only an OLD
-export (LVGL 8.3.11, for the STM32H7B3I-DK), so it cannot be used with Zephyr's LVGL 9.5.
+The design is `UI/DigitalDash/DigitalDash.spj` in THIS repository. `DashProject` (in Documents) is your old
+working copy: the repo's `DigitalDash.slp` file still stores absolute paths into it, which is why the export
+paths looked strange and the export failed (the saved Project Export Root,
+`DashProject/DigitalDash_480x272/SquareLine_Project`, does not exist). The folder
+`UI/DigitalDash_480x272/SquareLine_Project` is only an OLD export (LVGL 8.3.11, for the STM32H7B3I-DK).
 
-- [ ] Open `UI/DigitalDash/DigitalDash.spj` in the new SquareLine Studio. It may upgrade the project
-      file (it was saved by 1.6.1, project version 58). The project is in git, so you can undo.
-- [ ] Project settings: **resolution 480 x 272**, **colour depth 16 bit**, **LVGL 9.x** (as close to
-      9.5 as the tool offers), no board profile.
-- [ ] Give the widgets clear names (for example `ui_LabelRpm`, `ui_LabelEthanol`) and include a
-      **critical alert screen or panel** for the Ethanol Node fault (big, red, readable at a glance).
-- [ ] **Export UI Files** (not "Export Project") into a new folder `UI/DigitalDash_480x272/lvgl9_export/`.
-- [ ] Tell Claude which SquareLine and LVGL versions it reported.
+In SquareLine: Project Settings, **File Export**:
 
-Until then the M7 app uses a small hand-written LVGL screen, so CAN and the cross-core path are not
-blocked by the design.
+- [ ] **Project Export Root:** `/Users/openinvite/Documents/TrackCAN/UI/DigitalDash_480x272/lvgl9_project`
+      (an empty folder, only used by "Export Project". Do NOT point it at `SquareLine_Project`, it would
+      overwrite the old export.)
+- [ ] **UI Files Export Path:** `/Users/openinvite/Documents/TrackCAN/UI/DigitalDash_480x272/lvgl9_export`
+- [ ] **LVGL Include Path:** `lvgl.h` (not `lvgl/lvgl.h`: Zephyr's LVGL provides `<lvgl.h>`; there is no
+      `lvgl/` subfolder in its include path).
+- [ ] **Image export mode:** leave "Source code" for now (see the size warning below).
+
+In the project settings (not the File Export page):
+
+- [ ] **LVGL version 9.5** (Zephyr here ships exactly 9.5.0). The export you made today in
+      `DashProject/UI/DigitalDash_LVGL9` is still **LVGL 8.3.11** (its `ui.h` says so), so the version
+      was not applied. Re-export and check that `ui.h` now says `LVGL version: 9.5.x`.
+- [ ] Resolution **480 x 272**, colour depth **16 bit**, no board profile (or any profile: only the generated
+      starter project changes, not the UI files).
+- [ ] Use **Export UI Files**, then send me the exact error text if one still appears.
+- [ ] Saving the project rewrites `UI/DigitalDash/DigitalDash.slp` with the new paths: that is expected.
+
+### Size warning: the design does not fit in flash as exported
+
+The 480x272 design as exported today holds **3.9 MB** of image and font data (94 images = 3.79 MB, 3 fonts
+= 0.10 MB), but each core's internal flash bank is **1 MB**, and the M7 image already uses about 0.4 MB
+for LVGL and the app. The cause is one animation: **61 frames of a 461x39 tachometer strip (3.3 MB)**, plus a
+full-screen 480x272 background with alpha (392 KB). The design needs to change (use LVGL's own bar or
+arc widgets for the tachometer, an opaque or gradient background) or the images must live in external flash.
+Decide with Claude before spending time on the export.
 
 ## 2. Bench test of M1 (needs the board)
 
