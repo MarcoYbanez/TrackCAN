@@ -109,3 +109,11 @@ hardware timeout then resets the chip).
   after 5 s. Never set it in a car build.
 
 The M7 console also prints the link state changes and, once a second, the flags (`demo`, `engine`, `alert`).
+
+## Alerts: what gets the full screen
+
+The full-screen error is reserved for riskier data. An ethanol problem (the Node reports a critical fault, goes silent, never
+appears, or feeds the ECU its default E85) is shown in the **ethanol box itself**: red box and red text, with `--` in red when
+there is no number to show. Today the full-screen error appears only for the dash's own failures: the M4 link lost (NO DATA CAN
+CORE LOST), mismatched core images (REFLASH BOTH CORES) and a watchdog that could not start. Which data deserves the full screen
+is an open decision for the owner.

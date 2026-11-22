@@ -116,8 +116,12 @@ dash_lamp_t dash_lamp(bool data_valid, bool condition_active)
     return condition_active ? DASH_LAMP_ACTIVE : DASH_LAMP_NORMAL;
 }
 
-dash_level_t dash_ethanol_level(bool data_valid, bool output_is_default)
+dash_level_t dash_ethanol_level(bool data_valid, bool output_is_default, bool alert)
 {
+    if (alert) {
+        return DASH_LEVEL_ALERT; /* critical, silent or never seen: red even though there may be no
+                                    number to show */
+    }
     if (!data_valid) {
         return DASH_LEVEL_NO_DATA;
     }

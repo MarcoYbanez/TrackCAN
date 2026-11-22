@@ -69,6 +69,7 @@ static lv_obj_t *l_alert;       /* full-screen alert, hidden until needed */
 static lv_obj_t *l_demo_banner; /* DEMO marker, shown only while the M4 reports demo data */
 static lv_obj_t *l_demo_frame;
 static dash_link_state_t l_last_state = DASH_LINK_WAITING;
+static dash_level_t l_eth_level; /* what the ethanol box shows, for the console */
 
 static uint8_t l_main_lit;
 static uint8_t l_top_lit;
@@ -332,10 +333,20 @@ static void show_snapshot(const dash_snapshot_t *s)
     show_box(ui_Oil_Pressure, ui_Oil_Pressure_Overlay, analog, oil_press, 999, "%d",
              l_lvl_oil_press);
     show_box(ui_Gas_Level, ui_Fuel_Overlay, analog, fuel, 999, "%d", l_lvl_fuel);
-    /* Red box and red text when the Node is feeding the ECU its default E85 instead of a
-     * measurement. */
-    show_box(ui_Ethanol, ui_Ethanol_Overlay, eth, d->ethanol_pct, 99, "E%d",
-             dash_ethanol_level(eth, d->ethanol_output_default));
+    /* The ethanol box carries the ethanol problem: red box and red text when the Node reports a
+     * critical fault, has gone silent, never appeared, or is feeding the ECU its default E85. With
+     * no number to show it reads "--" in red. The full-screen error is not used for this: it is
+     * kept for riskier data. */
+    {
+        dash_level_t eth_lvl = dash_ethanol_level(eth, d->ethanol_output_default, d->ethanol_alert);
+
+        if (eth && dash_box_value_fits(d->ethanol_pct, 99)) {
+            show_box(ui_Ethanol, ui_Ethanol_Overlay, true, d->ethanol_pct, 99, "E%d", eth_lvl);
+        } else {
+            show_box_text(ui_Ethanol, ui_Ethanol_Overlay, "--", eth_lvl);
+        }
+        l_eth_level = eth_lvl;
+    }
 
     /* Battery, AFR and boost have no CAN source yet (TCAN-4): the M4 marks them valid only in the
      * demo drive, otherwise they show "--". */
@@ -394,10 +405,10 @@ static void show_snapshot(const dash_snapshot_t *s)
                         (int)s->can_init_err);
             }
         }
-        LOG_INF(
-            "fresh: analog %d  ethanol %d  lights %d  lights 0x%03x  demo %d  engine %d  alert %d",
-            analog, eth, lights, (unsigned)d->lights, (s->flags & DASH_FLAG_DEMO) != 0, engine,
-            d->ethanol_alert);
+        LOG_INF("fresh: analog %d  ethanol %d  lights %d  lights 0x%03x  demo %d  engine %d  alert "
+                "%d  eth_box %d  screen_alert %d",
+                analog, eth, lights, (unsigned)d->lights, (s->flags & DASH_FLAG_DEMO) != 0, engine,
+                d->ethanol_alert, (int)l_eth_level, !lv_obj_has_flag(l_alert, LV_OBJ_FLAG_HIDDEN));
     }
 
     /* Lamps: the ones with a CAN source (the car's own lamps through opto-couplers). The others
@@ -421,7 +432,9 @@ static void show_snapshot(const dash_snapshot_t *s)
     }
     show_lamp(ui_GPS_REG, DASH_LAMP_NOT_LIT);
 
-    ui_set_alert(d->ethanol_alert, "CHECK\nETHANOL");
+    /* A good snapshot means the link is up and the layouts match, so any full-screen error from
+     * before is over. */
+    ui_set_alert(false, "");
 }
 
 /* Reads one consistent snapshot under the hardware semaphore. */

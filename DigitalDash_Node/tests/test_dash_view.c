@@ -217,11 +217,20 @@ static void test_owner_thresholds(void)
 
 static void test_ethanol_level(void)
 {
-    CHECK(dash_ethanol_level(true, false) == DASH_LEVEL_NORMAL);
-    CHECK(dash_ethanol_level(true, true) == DASH_LEVEL_ALERT); /* defaulted E85: red */
-    CHECK(dash_ethanol_level(false, false) == DASH_LEVEL_NO_DATA);
-    CHECK(dash_ethanol_level(false, true) ==
+    /* (data valid, output is default, alert) */
+    CHECK(dash_ethanol_level(true, false, false) == DASH_LEVEL_NORMAL);
+    CHECK(dash_ethanol_level(true, true, false) == DASH_LEVEL_ALERT); /* defaulted E85: red */
+    CHECK(dash_ethanol_level(false, false, false) ==
+          DASH_LEVEL_NO_DATA); /* nothing yet, nothing wrong yet */
+    CHECK(dash_ethanol_level(false, true, false) ==
           DASH_LEVEL_NO_DATA); /* stale data is no data, whatever the flag says */
+
+    /* The alert makes the box red whether or not there is a number to show: critical with data, and
+     * silent or never seen without any. */
+    CHECK(dash_ethanol_level(true, false, true) == DASH_LEVEL_ALERT);
+    CHECK(dash_ethanol_level(false, false, true) == DASH_LEVEL_ALERT);
+    CHECK(dash_ethanol_level(false, true, true) == DASH_LEVEL_ALERT);
+    CHECK(dash_ethanol_level(true, true, true) == DASH_LEVEL_ALERT);
 }
 
 static void test_box_fit(void)
