@@ -64,6 +64,13 @@ void dash_can_step(void)
     publish();
 }
 
+void dash_can_get_stats(struct dash_can_stats *out)
+{
+    out->rx_frames = l_can.rx_frames;
+    out->rx_bad_frames = l_can.rx_bad_frames;
+    out->tx_dropped = l_can.tx_dropped;
+}
+
 void dash_can_set_engine(uint16_t rpm, uint16_t speed_kmh_x100)
 {
     l_rpm = rpm;

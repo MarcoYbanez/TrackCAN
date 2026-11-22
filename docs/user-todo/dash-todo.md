@@ -66,3 +66,19 @@ Build per `DigitalDash_Node/README.md`, then flash the M4 and M7 images.
       its datasheet in a browser and put it in `assets/documentation/` (Winstar's site and the reseller
       mirror both refuse automated downloads). I need the pixel clock, the timing table and the backlight
       current.
+
+## Connect the Dash to the CAN bus (TCAN-6, step 2)
+
+The no-wiring loopback test passes. The next step needs your hardware; Claude cannot do it.
+
+- [ ] **Find the CAN connector and its CANH / CANL pins for FDCAN1.** UM2488 has no CAN pinout. Use the schematic pack on the STM32H745I-DISCO
+      page on st.com (check FDCAN1 TX = PH13, RX = PH14 and the transceiver U21 or U22) or the board silkscreen. Your note says "CN1 = FDCAN1";
+      it is unverified. Write what you find in `docs/journal/2026-11-22-tcan6-dash-m4-fdcan.md`.
+- [ ] **Check whether the board's transceiver needs anything** (power, a standby or slope jumper). An ST forum reply says the DISCO has two
+      MCP2562FD on board and needs no external one; that is not a source, so confirm it in the schematic. If you do add an external
+      transceiver, check its VIO level against 3.3 V.
+- [ ] **Termination:** 120 ohm at each end of the bus only, with a common ground. Check whether the board has a termination jumper.
+- [ ] **Connect a node** (the DataLogger, or the Ethanol Node) and flash the live image: `! scripts/dash_build_flash.sh all live`.
+- [ ] **What to look for** on the M7 console (ST-LINK USB serial, 115200 baud): `can: ACTIVE`, `tx_err` falling back to 0, the `frames` counter
+      rising, and `fresh: analog 1` once the DataLogger is sending. A bit-rate mismatch shows as rising `rx_err` and no frames.
+- [ ] **Then unplug the node:** the boxes must show `--` within three message cycles and the ethanol alert must come on.

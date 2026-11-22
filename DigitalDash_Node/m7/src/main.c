@@ -373,6 +373,27 @@ static void show_snapshot(const dash_snapshot_t *s)
                 (unsigned)d->ethanol_pct, (unsigned)(s->afr_x10 / 10u),
                 (unsigned)(s->afr_x10 % 10u), (unsigned)(s->battery_volts_x10 / 10u),
                 (unsigned)(s->battery_volts_x10 % 10u));
+        if ((s->extra_valid & DASH_EXTRA_CAN) != 0) {
+            static const char *const hw[] = {"UNKNOWN", "ACTIVE",  "WARNING",    "PASSIVE",
+                                             "BUS_OFF", "STOPPED", "INIT_FAILED"};
+
+            LOG_INF("can: %s  tx_err %u  rx_err %u  frames %u  dropped %u",
+                    s->can_state < ARRAY_SIZE(hw) ? hw[s->can_state] : "?", (unsigned)s->can_tx_err,
+                    (unsigned)s->can_rx_err, (unsigned)s->can_rx_frames,
+                    (unsigned)s->can_tx_dropped);
+            LOG_INF("can: kernel clock %u Hz, prescaler %u, %u tq per bit, sample point %u.%u %%",
+                    (unsigned)s->can_core_clock_hz, (unsigned)s->can_prescaler,
+                    (unsigned)s->can_tq_per_bit, (unsigned)(s->can_sample_point / 10u),
+                    (unsigned)(s->can_sample_point % 10u));
+            if (s->can_state == DASH_CAN_HW_INIT_FAILED) {
+                static const char *const step[] = {"none", "device not ready", "set mode",
+                                                   "add filter", "start"};
+
+                LOG_ERR("can: start failed at step '%s', error %d",
+                        s->can_init_step < ARRAY_SIZE(step) ? step[s->can_init_step] : "?",
+                        (int)s->can_init_err);
+            }
+        }
         LOG_INF(
             "fresh: analog %d  ethanol %d  lights %d  lights 0x%03x  demo %d  engine %d  alert %d",
             analog, eth, lights, (unsigned)d->lights, (s->flags & DASH_FLAG_DEMO) != 0, engine,
@@ -386,7 +407,18 @@ static void show_snapshot(const dash_snapshot_t *s)
     show_lamp(ui_BAT_REG, dash_lamp(lights, lights && (d->lights & LIGHT_CHARGE_WARNING)));
     show_lamp(ui_TMP_REG, DASH_LAMP_NOT_LIT);
     show_lamp(ui_TCC_REG, DASH_LAMP_NOT_LIT);
-    show_lamp(ui_CAN_REG, DASH_LAMP_NOT_LIT);
+    /* CAN lamp: the controller's health. Red when it is bus-off, error-passive (for example nobody
+     * acknowledges our frames), stopped or failed to start; cyan when it is healthy; dim when this
+     * image has no CAN (the demo). */
+    {
+        bool can_known =
+            (s->extra_valid & DASH_EXTRA_CAN) != 0 && s->can_state != DASH_CAN_HW_UNKNOWN;
+        bool can_bad = s->can_state == DASH_CAN_HW_PASSIVE || s->can_state == DASH_CAN_HW_BUS_OFF ||
+                       s->can_state == DASH_CAN_HW_STOPPED ||
+                       s->can_state == DASH_CAN_HW_INIT_FAILED;
+
+        show_lamp(ui_CAN_REG, dash_lamp(can_known, can_bad));
+    }
     show_lamp(ui_GPS_REG, DASH_LAMP_NOT_LIT);
 
     ui_set_alert(d->ethanol_alert, "CHECK\nETHANOL");
