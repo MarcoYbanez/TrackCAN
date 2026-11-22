@@ -141,6 +141,12 @@ instance maps to which core on this chip.
 - **Boost track** 163 x 8 px at (308, 177).
 - **Captions:** RPM (412,85), SPEED (10,99), BOOST (308,99), **BAR** (308,158), MPH (10,209).
 - The lit segments are drawn exactly on the off segments, so the background can also be recreated from this file.
+- **Lit pixels, stored exactly** (`lit_x0`, `lit_columns`, `lit_base_row` per segment): a lit segment is a stripe
+  pattern (all rows identical): a darker first column, full-colour middle, darker last column, then a black gap and
+  a faint glow column; plus a dim one-pixel baseline row under it (about 37% brightness: cyan `#005460`, amber
+  `#604300`, red `#600A0A`). **[verified]** Rebuilding the fully lit bars from the JSON matches the source frames
+  `MainTachometer00060.png` and `TopTach00001.png` in **0 of 17,979 and 0 of 4,149 pixels differing**, so the
+  61 + 16 tach frames are no longer needed for the look.
 
 **Decision recorded:** the RPM bars are drawn in code; lamps are red, normal or dimmed cyan; gauge tiles are
 border-only art tinted by status; thresholds are variables (TCAN-5). Note: the baked caption says **BAR**

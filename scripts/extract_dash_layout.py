@@ -118,6 +118,35 @@ def main():
     for sg, c in zip(top_bar, top_lit):
         sg["lit_colour"], sg["zone"] = c, zone(c)
 
+    # Exact lit pixels: every lit segment is a vertical stripe pattern (rows are identical), so the colour of
+    # each column is enough to redraw it pixel for pixel. Columns start at x + lit_x0; the black gap column is
+    # not stored. Sampled from the fully lit frames.
+    def lit_columns(path, segs, y0):
+        im = Image.open(path).convert("RGBA")
+        flat = Image.alpha_composite(Image.new("RGBA", im.size, (0, 0, 0, 255)), im).convert("RGB")
+        for sg in segs:
+            row_y = y0 + sg["h"] // 2 - sg["y"] if False else sg["h"] // 2
+            cols = []
+            for fx in range(sg["x"] - 10 - 2, sg["x"] - 10 + sg["w"] + 3):
+                cols.append((fx, flat.getpixel((fx, row_y)) if 0 <= fx < im.size[0] else (0, 0, 0)))
+            lit = [i for i, (_, c) in enumerate(cols) if max(c) > 8]
+            # keep the run of lit columns that overlaps the segment, drop neighbours' pixels
+            mid = sg["w"] // 2 + 2
+            run = [i for i in lit if abs(i - mid) <= sg["w"] // 2 + 1]
+            if not run:
+                sg["lit_x0"], sg["lit_columns"] = 0, []
+                continue
+            a, b = min(run), max(run)
+            sg["lit_x0"] = cols[a][0] + 10 - sg["x"]
+            sg["lit_columns"] = ["#%02X%02X%02X" % cols[i][1] for i in range(a, b + 1)]
+            # A dim one pixel baseline sits under every lit segment (row y + h), one extra column wide.
+            base_y = im.size[1] - 1
+            sg["lit_base_row"] = ["#%02X%02X%02X" % flat.getpixel((min(im.size[0] - 1, cols[i][0]), base_y))
+                                  for i in range(a, b + 2)]
+
+    lit_columns(ROOT / "UI/DigitalDash/assets/Main_Tach/MainTachometer00060.png", main_bar, 20)
+    lit_columns(ROOT / "UI/DigitalDash/assets/Top_Tach/TopTach00001.png", top_bar, 8)
+
     layout = {
         "source": str(BG.relative_to(ROOT)),
         "size": list(img.size),
