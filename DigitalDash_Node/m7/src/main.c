@@ -135,13 +135,17 @@ static void set_user_state(lv_obj_t *o, int n)
     }
 }
 
-/* A gauge box: the value as text, and the red tint on the label and its tile when out of range. */
-static void show_box(lv_obj_t *label, lv_obj_t *tile, bool valid, int32_t value, dash_level_t lvl)
+/* A gauge box (3 characters wide): the value as text, and the red tint on the label and its tile
+ * when out of range. A value that does not fit shows "--" rather than wrapping onto a second line.
+ */
+static void show_box(lv_obj_t *label, lv_obj_t *tile, bool valid, int32_t value, int32_t max_value,
+                     const char *fmt, dash_level_t lvl)
 {
-    if (valid) {
-        lv_label_set_text_fmt(label, "%d", (int)value);
+    if (valid && dash_box_value_fits(value, max_value)) {
+        lv_label_set_text_fmt(label, fmt, (int)value);
     } else {
         lv_label_set_text(label, "--"); /* never a number that is not live */
+        lvl = DASH_LEVEL_NO_DATA;
     }
     set_user_state(label, lvl >= DASH_LEVEL_WARNING ? 1 : 0);
     set_user_state(tile, lvl >= DASH_LEVEL_WARNING ? 1 : 0);
@@ -199,16 +203,17 @@ static void show_snapshot(const dash_snapshot_t *s)
                                      &l_cfg.oil_pressure_psi_x10, l_lvl_oil_press);
     l_lvl_fuel =
         dash_box_level(analog, (int32_t)d->fuel_level_pct_x10, &l_cfg.fuel_pct_x10, l_lvl_fuel);
-    show_box(ui_Coolant, ui_Coolant_Overlay, analog, coolant, l_lvl_coolant);
-    show_box(ui_Oil_Temp, ui_Oil_Temp_Overlay, analog, oil_temp, l_lvl_oil_temp);
-    show_box(ui_Oil_Pressure, ui_Oil_Pressure_Overlay, analog, oil_press, l_lvl_oil_press);
-    show_box(ui_Gas_Level, ui_Fuel_Overlay, analog, fuel, l_lvl_fuel);
-    show_box(ui_Ethanol, ui_Ethanol_Overlay, eth, d->ethanol_pct,
+    show_box(ui_Coolant, ui_Coolant_Overlay, analog, coolant, 999, "%d", l_lvl_coolant);
+    show_box(ui_Oil_Temp, ui_Oil_Temp_Overlay, analog, oil_temp, 999, "%d", l_lvl_oil_temp);
+    show_box(ui_Oil_Pressure, ui_Oil_Pressure_Overlay, analog, oil_press, 999, "%d",
+             l_lvl_oil_press);
+    show_box(ui_Gas_Level, ui_Fuel_Overlay, analog, fuel, 999, "%d", l_lvl_fuel);
+    show_box(ui_Ethanol, ui_Ethanol_Overlay, eth, d->ethanol_pct, 99, "E%d",
              eth ? DASH_LEVEL_NORMAL : DASH_LEVEL_NO_DATA);
 
     /* Not on the CAN network yet (TCAN-4): shown as no data, never as a made-up number. */
-    show_box(ui_Battery, ui_Battery_Overlay, false, 0, DASH_LEVEL_NO_DATA);
-    show_box(ui_AFR, ui_AFR_Overlay, false, 0, DASH_LEVEL_NO_DATA);
+    show_box(ui_Battery, ui_Battery_Overlay, false, 0, 999, "%d", DASH_LEVEL_NO_DATA);
+    show_box(ui_AFR, ui_AFR_Overlay, false, 0, 999, "%d", DASH_LEVEL_NO_DATA);
     lv_label_set_text(ui_Boost_Label, "--");
     set_user_state(ui_Boost_Label, 0);
     lv_obj_add_flag(l_boost_fill, LV_OBJ_FLAG_HIDDEN);

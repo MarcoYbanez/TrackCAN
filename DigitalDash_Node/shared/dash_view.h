@@ -100,6 +100,10 @@ dash_lamp_t dash_lamp(bool data_valid, bool condition_active);
 dash_level_t dash_box_level(bool data_valid, int32_t value, const dash_limits_t *lim,
                             dash_level_t prev);
 
+/* True when a value prints in a 3 character gauge box (-99 .. max_value). Anything else shows "--".
+ */
+bool dash_box_value_fits(int32_t value, int32_t max_value);
+
 /* km/h in hundredths to mph in tenths, rounded. */
 uint32_t dash_kmh_x100_to_mph_x10(uint32_t kmh_x100);
 

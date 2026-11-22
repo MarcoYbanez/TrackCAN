@@ -171,6 +171,18 @@ static void test_unset_limits_never_warn(void)
           DASH_LEVEL_WARNING);
 }
 
+static void test_box_fit(void)
+{
+    /* The gauge boxes hold exactly 3 characters: -99 .. 999, ethanol E0 .. E99. */
+    CHECK(dash_box_value_fits(0, 999));
+    CHECK(dash_box_value_fits(999, 999));
+    CHECK(!dash_box_value_fits(1000, 999)); /* 4 digits would wrap onto a second line */
+    CHECK(dash_box_value_fits(-99, 999));
+    CHECK(!dash_box_value_fits(-100, 999)); /* "-100" is 4 characters */
+    CHECK(dash_box_value_fits(99, 99));
+    CHECK(!dash_box_value_fits(100, 99)); /* "E100" is 4 characters */
+}
+
 static void test_speed_units(void)
 {
     /* 1 km/h = 0.621371 mph; result in tenths of mph. */
@@ -192,6 +204,7 @@ int main(void)
     test_lamps();
     test_box_levels();
     test_unset_limits_never_warn();
+    test_box_fit();
     test_speed_units();
 
     printf("%d checks, %d failures\n", l_checks, l_failures);

@@ -135,6 +135,11 @@ dash_level_t dash_box_level(bool data_valid, int32_t value, const dash_limits_t 
     return DASH_LEVEL_NORMAL;
 }
 
+bool dash_box_value_fits(int32_t value, int32_t max_value)
+{
+    return value >= -99 && value <= max_value;
+}
+
 uint32_t dash_kmh_x100_to_mph_x10(uint32_t kmh_x100)
 {
     /* 1 km/h = 0.621371 mph, so mph x10 = km/h x100 * 0.621371 / 10 = kmh_x100 * 62137 / 1,000,000.
