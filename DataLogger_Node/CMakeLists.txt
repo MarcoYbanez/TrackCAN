@@ -10,11 +10,14 @@ endif()
 
 target_sources(app PRIVATE
 	src/main.c
+	src/logger/logger_core.c
+	src/logger/sd_logger.c
 	${TRACKCAN_PATH}/can/datalogger.c
 	${TRACKCAN_PATH}/can/common/trackcan_core.c
 	${TRACKCAN_PATH}/can/generated/trackcan.c
 )
 target_include_directories(app PRIVATE
+	src/logger
 	${TRACKCAN_PATH}/can
 	${TRACKCAN_PATH}/can/common
 	${TRACKCAN_PATH}/can/generated

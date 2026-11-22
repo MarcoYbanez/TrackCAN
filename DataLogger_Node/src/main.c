@@ -7,6 +7,8 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_utils.h>
 
+#include "logger/sd_logger.h"
+
 /* GPIO */
 // #define IN_PIN DT_ALIAS(in)
 const struct gpio_dt_spec gp_pin = GPIO_DT_SPEC_GET(DT_PATH(user, out_pin), gpios);
@@ -24,6 +26,8 @@ const struct spi_dt_spec eng_spi = SPI_DT_SPEC_GET(ENG_SPI, SPI_WORD_SET(8) | SP
 
 int main(void)
 {
+	sd_logger_start(); /* the SD card logger runs in its own thread */
+
 	struct spi_buf_set rx_channels[8] = {
 		{ .buffers =
 			  (struct spi_buf[]){

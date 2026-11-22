@@ -36,6 +36,7 @@ CAN_MSGQ_DEFINE(l_rx_msgq, CAN_RX_QUEUE_LEN);
 static tcan_t l_can;
 static struct k_spinlock l_lock;
 static uint8_t l_heartbeat_counter;
+static datalogger_can_tap_t l_tap;
 
 /*
  * PLACEHOLDER VALUES. The Defi sensor transfer curves are not known yet (see
@@ -81,7 +82,12 @@ static int port_send(const tcan_frame_t *frame)
     memcpy(zf.data, frame->data, frame->dlc);
 
     /* K_NO_WAIT plus a callback keeps this non-blocking. */
-    return can_send(l_can_dev, &zf, K_NO_WAIT, tx_done, NULL);
+    int ret = can_send(l_can_dev, &zf, K_NO_WAIT, tx_done, NULL);
+
+    if (ret == 0 && l_tap != NULL) {
+        l_tap(true, frame);
+    }
+    return ret;
 }
 
 static int port_receive(tcan_frame_t *frame)
@@ -100,6 +106,9 @@ static int port_receive(tcan_frame_t *frame)
     frame->dlc = zf.dlc;
     memset(frame->data, 0, sizeof(frame->data));
     memcpy(frame->data, zf.data, zf.dlc);
+    if (l_tap != NULL) {
+        l_tap(false, frame);
+    }
     return 1;
 }
 
@@ -196,6 +205,11 @@ static void can_thread(void *p1, void *p2, void *p3)
 /*******************************************************
  * Public Function Definitions
  *******************************************************/
+void datalogger_can_set_tap(datalogger_can_tap_t tap)
+{
+    l_tap = tap;
+}
+
 void datalogger_can_set_sample(const struct datalogger_sample *sample)
 {
     k_spinlock_key_t key = k_spin_lock(&l_lock);

@@ -127,3 +127,19 @@ Load the DAC output with a 10 kΩ resistor to ground, so there is no ECU on the 
 
 - [ ] **E1. Flash all nodes together.** The Ethanol message grew from 3 to 4 bytes. An old
       DataLogger or Dash counts every new ethanol frame as bad and ignores it.
+
+## DataLogger SD card bench test (TCAN-17)
+
+The SD logger builds and its logic is host tested, but it has **never run on the Teensy**. Claude cannot do this part.
+
+- [ ] A **FAT32** microSD card (32 GB or less is the safe choice). Note its brand and size. It will not be formatted by the logger; if the card
+      is exFAT or blank the LED stays steady on.
+- [ ] Insert the card, plug the Teensy into the Mac by USB, run `! scripts/datalogger_build_flash.sh all` and press the Teensy's program
+      button when it asks.
+- [ ] Watch the board LED: **slow blink** = mounted and logging, **fast blink** = no card answered, **steady on** = card or file system error.
+      (A USB-serial adapter on Teensy pins 0 and 1 at 115200 baud shows the same in words, if you have one.)
+- [ ] Let it run about a minute, then **power off by unplugging USB** (that is the power-cut test), take the card to the Mac, and open `LOG0001.CSV`.
+      Tell Claude what is in it: the header, then TX lines for ids 200, 201 and 4xx heartbeats, a NOTE line for the start.
+- [ ] Reinsert the card, power on again: a **new** file (`LOG0002.CSV`) must appear and `LOG0001.CSV` must be untouched.
+- [ ] Pull the card out while it is logging: the LED must go to the fast blink and the CAN side must keep running; put it back and logging
+      must resume in a new file within a few seconds.
