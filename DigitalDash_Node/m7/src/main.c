@@ -92,6 +92,20 @@ static void ui_build(void)
 {
     ui_init(); /* the SquareLine screen */
 
+    /* The export creates the gauge tile overlays AFTER the number labels, and each overlay has an
+     * opaque background, so they would draw over the numbers and hide them. Put them just above the
+     * background image, under every label. (Fixed here, not in the design, so a re-export does not
+     * undo it.) */
+    {
+        lv_obj_t *const overlays[] = {ui_Oil_Pressure_Overlay, ui_Oil_Temp_Overlay, ui_AFR_Overlay,
+                                      ui_Ethanol_Overlay,      ui_Battery_Overlay,  ui_Fuel_Overlay,
+                                      ui_Coolant_Overlay};
+
+        for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
+            lv_obj_move_to_index(overlays[i], 1);
+        }
+    }
+
     l_main_canvas = bar_canvas(&l_main_buf, &dash_main_bar, &l_main_lit);
     l_top_canvas = bar_canvas(&l_top_buf, &dash_top_bar, &l_top_lit);
 
@@ -275,6 +289,15 @@ static void show_snapshot(const dash_snapshot_t *s)
                 (unsigned)(dash_kmh_x100_to_mph_x10(s->speed_kmh_x100) / 10u),
                 (int)(s->boost_psi_x10 / 10),
                 (int)(s->boost_psi_x10 < 0 ? -(s->boost_psi_x10 % 10) : s->boost_psi_x10 % 10));
+        /* The values the boxes are given, and whether their data counts as live (1 = fresh). */
+        LOG_INF("boxes: coolant %d F  oil %d F  press %u psi  fuel %u %%  eth %u %%  afr %u.%u  "
+                "batt %u.%u V",
+                (int)coolant, (int)oil_temp, (unsigned)oil_press, (unsigned)fuel,
+                (unsigned)d->ethanol_pct, (unsigned)(s->afr_x10 / 10u),
+                (unsigned)(s->afr_x10 % 10u), (unsigned)(s->battery_volts_x10 / 10u),
+                (unsigned)(s->battery_volts_x10 % 10u));
+        LOG_INF("fresh: analog %d  ethanol %d  lights %d  lights 0x%03x", analog, eth, lights,
+                (unsigned)d->lights);
     }
 
     /* Lamps: the ones with a CAN source (the car's own lamps through opto-couplers). The others
