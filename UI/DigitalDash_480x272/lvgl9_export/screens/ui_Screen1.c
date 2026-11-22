@@ -7,8 +7,6 @@
 
 lv_obj_t * ui_Screen1 = NULL;
 lv_obj_t * ui_Dash_BG = NULL;
-lv_obj_t * ui_TopTach = NULL;
-lv_obj_t * ui_MainTach = NULL;
 lv_obj_t * ui_MPH_Label = NULL;
 lv_obj_t * ui_Coolant = NULL;
 lv_obj_t * ui_Oil_Pressure = NULL;
@@ -18,7 +16,6 @@ lv_obj_t * ui_Ethanol = NULL;
 lv_obj_t * ui_Battery = NULL;
 lv_obj_t * ui_Gas_Level = NULL;
 lv_obj_t * ui_Boost_Label = NULL;
-lv_obj_t * ui_B_Meter = NULL;
 lv_obj_t * ui_CEL_REG = NULL;
 lv_obj_t * ui_OIL_REG = NULL;
 lv_obj_t * ui_BAT_REG = NULL;
@@ -34,23 +31,6 @@ lv_obj_t * ui_Battery_Overlay = NULL;
 lv_obj_t * ui_Fuel_Overlay = NULL;
 lv_obj_t * ui_Coolant_Overlay = NULL;
 // event funtions
-void ui_event_TopTach(lv_event_t * e)
-{
-    lv_event_code_t event_code = lv_event_get_code(e);
-
-    if(event_code == LV_EVENT_VALUE_CHANGED) {
-        TopTachometer_Animation(ui_TopTach, 0);
-    }
-}
-
-void ui_event_MainTach(lv_event_t * e)
-{
-    lv_event_code_t event_code = lv_event_get_code(e);
-
-    if(event_code == LV_EVENT_VALUE_CHANGED) {
-        MainTachometer_Animation(ui_MainTach, 0);
-    }
-}
 
 // build funtions
 
@@ -66,26 +46,6 @@ void ui_Screen1_screen_init(void)
     lv_obj_set_align(ui_Dash_BG, LV_ALIGN_CENTER);
     lv_obj_add_flag(ui_Dash_BG, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
     lv_obj_remove_flag(ui_Dash_BG, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-
-    ui_TopTach = lv_image_create(ui_Screen1);
-    lv_image_set_src(ui_TopTach, &ui_img_top_tach_toptach00001_png);
-    lv_obj_set_width(ui_TopTach, LV_SIZE_CONTENT);   /// 1
-    lv_obj_set_height(ui_TopTach, LV_SIZE_CONTENT);    /// 1
-    lv_obj_set_x(ui_TopTach, 0);
-    lv_obj_set_y(ui_TopTach, -125);
-    lv_obj_set_align(ui_TopTach, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_TopTach, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_remove_flag(ui_TopTach, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
-
-    ui_MainTach = lv_image_create(ui_Screen1);
-    lv_image_set_src(ui_MainTach, &ui_img_main_tach_maintachometer00060_png);
-    lv_obj_set_width(ui_MainTach, LV_SIZE_CONTENT);   /// 461
-    lv_obj_set_height(ui_MainTach, LV_SIZE_CONTENT);    /// 39
-    lv_obj_set_x(ui_MainTach, 0);
-    lv_obj_set_y(ui_MainTach, -97);
-    lv_obj_set_align(ui_MainTach, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_MainTach, LV_OBJ_FLAG_ADV_HITTEST);     /// Flags
-    lv_obj_remove_flag(ui_MainTach, LV_OBJ_FLAG_SCROLLABLE);      /// Flags
 
     ui_MPH_Label = lv_label_create(ui_Screen1);
     lv_obj_set_width(ui_MPH_Label, 190);
@@ -211,34 +171,6 @@ void ui_Screen1_screen_init(void)
                                 (lv_style_selector_t)LV_PART_MAIN | LV_STATE_USER_2);
     lv_obj_set_style_text_opa(ui_Boost_Label, 255, (lv_style_selector_t)LV_PART_MAIN | LV_STATE_USER_2);
 
-    ui_B_Meter = lv_slider_create(ui_Screen1);
-    lv_slider_set_value(ui_B_Meter, 100, LV_ANIM_OFF);
-    if(lv_slider_get_mode(ui_B_Meter) == LV_SLIDER_MODE_RANGE) lv_slider_set_start_value(ui_B_Meter, 0, LV_ANIM_OFF);
-    lv_obj_set_width(ui_B_Meter, 161);
-    lv_obj_set_height(ui_B_Meter, 6);
-    lv_obj_set_x(ui_B_Meter, 149);
-    lv_obj_set_y(ui_B_Meter, 45);
-    lv_obj_set_align(ui_B_Meter, LV_ALIGN_CENTER);
-    lv_obj_add_flag(ui_B_Meter, LV_OBJ_FLAG_EVENT_BUBBLE);     /// Flags
-    lv_obj_set_style_radius(ui_B_Meter, 0, (lv_style_selector_t)LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_B_Meter, lv_color_hex(0xFFFFFF), (lv_style_selector_t)LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_B_Meter, 0, (lv_style_selector_t)LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_clip_corner(ui_B_Meter, true, (lv_style_selector_t)LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(ui_B_Meter, 0, (lv_style_selector_t)LV_PART_MAIN | LV_STATE_DEFAULT);
-
-    lv_obj_set_style_radius(ui_B_Meter, 0, (lv_style_selector_t)LV_PART_INDICATOR | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_image_src(ui_B_Meter, &ui_img_boostmeter_png,
-                                  (lv_style_selector_t)LV_PART_INDICATOR | LV_STATE_DEFAULT);
-
-    lv_obj_set_style_radius(ui_B_Meter, 0, (lv_style_selector_t)LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(ui_B_Meter, lv_color_hex(0xFFFFFF), (lv_style_selector_t)LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_opa(ui_B_Meter, 0, (lv_style_selector_t)LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_clip_corner(ui_B_Meter, true, (lv_style_selector_t)LV_PART_KNOB | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_width(ui_B_Meter, 0, (lv_style_selector_t)LV_PART_KNOB | LV_STATE_DEFAULT);
-
-    //Compensating for LVGL9.1 draw crash with bar/slider max value when top-padding is nonzero and right-padding is 0
-    if(lv_obj_get_style_pad_top(ui_B_Meter, LV_PART_MAIN) > 0) lv_obj_set_style_pad_right(ui_B_Meter,
-                                                                                              lv_obj_get_style_pad_right(ui_B_Meter, LV_PART_MAIN) + 1, LV_PART_MAIN);
     ui_CEL_REG = lv_image_create(ui_Screen1);
     lv_image_set_src(ui_CEL_REG, &ui_img_tri_state_status_tri_state_status_regular01_png);
     lv_obj_set_width(ui_CEL_REG, LV_SIZE_CONTENT);   /// 21
@@ -436,9 +368,6 @@ void ui_Screen1_screen_init(void)
                                    (lv_style_selector_t)LV_PART_MAIN | LV_STATE_USER_1);
     lv_obj_set_style_image_recolor_opa(ui_Coolant_Overlay, 255, (lv_style_selector_t)LV_PART_MAIN | LV_STATE_USER_1);
 
-    lv_obj_add_event_cb(ui_TopTach, ui_event_TopTach, LV_EVENT_ALL, NULL);
-    lv_obj_add_event_cb(ui_MainTach, ui_event_MainTach, LV_EVENT_ALL, NULL);
-
 }
 
 void ui_Screen1_screen_destroy(void)
@@ -448,8 +377,6 @@ void ui_Screen1_screen_destroy(void)
     // NULL screen variables
     ui_Screen1 = NULL;
     ui_Dash_BG = NULL;
-    ui_TopTach = NULL;
-    ui_MainTach = NULL;
     ui_MPH_Label = NULL;
     ui_Coolant = NULL;
     ui_Oil_Pressure = NULL;
@@ -459,7 +386,6 @@ void ui_Screen1_screen_destroy(void)
     ui_Battery = NULL;
     ui_Gas_Level = NULL;
     ui_Boost_Label = NULL;
-    ui_B_Meter = NULL;
     ui_CEL_REG = NULL;
     ui_OIL_REG = NULL;
     ui_BAT_REG = NULL;

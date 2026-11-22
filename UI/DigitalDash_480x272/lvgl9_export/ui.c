@@ -7,15 +7,11 @@
 #include "ui_helpers.h"
 
 ///////////////////// VARIABLES ////////////////////
-lv_anim_t * TopTach_Animation(lv_obj_t * TargetObject, int delay);
-lv_anim_t * MainTachometer_Animation(lv_obj_t * TargetObject, int delay);
 
 // EVENTS
 lv_obj_t * ui____initial_actions0;
 
 // IMAGES AND IMAGE SETS
-const lv_image_dsc_t * ui_imgset_maintachometer[61] = {&ui_img_main_tach_maintachometer00000_png, &ui_img_main_tach_maintachometer00001_png, &ui_img_main_tach_maintachometer00002_png, &ui_img_main_tach_maintachometer00003_png, &ui_img_main_tach_maintachometer00004_png, &ui_img_main_tach_maintachometer00005_png, &ui_img_main_tach_maintachometer00006_png, &ui_img_main_tach_maintachometer00007_png, &ui_img_main_tach_maintachometer00008_png, &ui_img_main_tach_maintachometer00009_png, &ui_img_main_tach_maintachometer00010_png, &ui_img_main_tach_maintachometer00011_png, &ui_img_main_tach_maintachometer00012_png, &ui_img_main_tach_maintachometer00013_png, &ui_img_main_tach_maintachometer00014_png, &ui_img_main_tach_maintachometer00015_png, &ui_img_main_tach_maintachometer00016_png, &ui_img_main_tach_maintachometer00017_png, &ui_img_main_tach_maintachometer00018_png, &ui_img_main_tach_maintachometer00019_png, &ui_img_main_tach_maintachometer00020_png, &ui_img_main_tach_maintachometer00021_png, &ui_img_main_tach_maintachometer00022_png, &ui_img_main_tach_maintachometer00023_png, &ui_img_main_tach_maintachometer00024_png, &ui_img_main_tach_maintachometer00025_png, &ui_img_main_tach_maintachometer00026_png, &ui_img_main_tach_maintachometer00027_png, &ui_img_main_tach_maintachometer00028_png, &ui_img_main_tach_maintachometer00029_png, &ui_img_main_tach_maintachometer00030_png, &ui_img_main_tach_maintachometer00031_png, &ui_img_main_tach_maintachometer00032_png, &ui_img_main_tach_maintachometer00033_png, &ui_img_main_tach_maintachometer00034_png, &ui_img_main_tach_maintachometer00035_png, &ui_img_main_tach_maintachometer00036_png, &ui_img_main_tach_maintachometer00037_png, &ui_img_main_tach_maintachometer00038_png, &ui_img_main_tach_maintachometer00039_png, &ui_img_main_tach_maintachometer00040_png, &ui_img_main_tach_maintachometer00041_png, &ui_img_main_tach_maintachometer00042_png, &ui_img_main_tach_maintachometer00043_png, &ui_img_main_tach_maintachometer00044_png, &ui_img_main_tach_maintachometer00045_png, &ui_img_main_tach_maintachometer00046_png, &ui_img_main_tach_maintachometer00047_png, &ui_img_main_tach_maintachometer00048_png, &ui_img_main_tach_maintachometer00049_png, &ui_img_main_tach_maintachometer00050_png, &ui_img_main_tach_maintachometer00051_png, &ui_img_main_tach_maintachometer00052_png, &ui_img_main_tach_maintachometer00053_png, &ui_img_main_tach_maintachometer00054_png, &ui_img_main_tach_maintachometer00055_png, &ui_img_main_tach_maintachometer00056_png, &ui_img_main_tach_maintachometer00057_png, &ui_img_main_tach_maintachometer00058_png, &ui_img_main_tach_maintachometer00059_png, &ui_img_main_tach_maintachometer00060_png};
-const lv_image_dsc_t * ui_imgset_toptach[17] = {&ui_img_top_tach_toptach00001_png, &ui_img_top_tach_toptach00002_png, &ui_img_top_tach_toptach00003_png, &ui_img_top_tach_toptach00004_png, &ui_img_top_tach_toptach00005_png, &ui_img_top_tach_toptach00006_png, &ui_img_top_tach_toptach00007_png, &ui_img_top_tach_toptach00008_png, &ui_img_top_tach_toptach00009_png, &ui_img_top_tach_toptach00010_png, &ui_img_top_tach_toptach00011_png, &ui_img_top_tach_toptach00012_png, &ui_img_top_tach_toptach00013_png, &ui_img_top_tach_toptach00014_png, &ui_img_top_tach_toptach00015_png, &ui_img_top_tach_toptach00016_png, &ui_img_top_tach_toptach00017_png};
 
 ///////////////////// TEST LVGL SETTINGS ////////////////////
 #if LV_COLOR_DEPTH != 16
@@ -23,60 +19,6 @@ const lv_image_dsc_t * ui_imgset_toptach[17] = {&ui_img_top_tach_toptach00001_pn
 #endif
 
 ///////////////////// ANIMATIONS ////////////////////
-lv_anim_t * TopTach_Animation(lv_obj_t * TargetObject, int delay)
-{
-    lv_anim_t * out_anim;
-    ui_anim_user_data_t * PropertyAnimation_0_user_data = lv_malloc(sizeof(ui_anim_user_data_t));
-    PropertyAnimation_0_user_data->target = TargetObject;
-    PropertyAnimation_0_user_data->imgset = (lv_img_dsc_t **)ui_imgset_toptach;
-    PropertyAnimation_0_user_data->imgset_size = sizeof(ui_imgset_toptach) / (sizeof(lv_image_dsc_t *));
-    PropertyAnimation_0_user_data->val = -1;
-    lv_anim_t PropertyAnimation_0;
-    lv_anim_init(&PropertyAnimation_0);
-    lv_anim_set_duration(&PropertyAnimation_0, 1000);
-    lv_anim_set_user_data(&PropertyAnimation_0, PropertyAnimation_0_user_data);
-    lv_anim_set_custom_exec_cb(&PropertyAnimation_0, _ui_anim_callback_set_image_frame);
-    lv_anim_set_values(&PropertyAnimation_0, 0, 17);
-    lv_anim_set_path_cb(&PropertyAnimation_0, lv_anim_path_linear);
-    lv_anim_set_delay(&PropertyAnimation_0, delay + 0);
-    lv_anim_set_deleted_cb(&PropertyAnimation_0, _ui_anim_callback_free_user_data);
-    lv_anim_set_reverse_duration(&PropertyAnimation_0, 0);
-    lv_anim_set_reverse_delay(&PropertyAnimation_0, 0);
-    lv_anim_set_repeat_count(&PropertyAnimation_0, 0);
-    lv_anim_set_repeat_delay(&PropertyAnimation_0, 0);
-    lv_anim_set_early_apply(&PropertyAnimation_0, false);
-    lv_anim_set_get_value_cb(&PropertyAnimation_0, &_ui_anim_callback_get_image_frame);
-    out_anim = lv_anim_start(&PropertyAnimation_0);
-
-    return out_anim;
-}
-lv_anim_t * MainTachometer_Animation(lv_obj_t * TargetObject, int delay)
-{
-    lv_anim_t * out_anim;
-    ui_anim_user_data_t * PropertyAnimation_0_user_data = lv_malloc(sizeof(ui_anim_user_data_t));
-    PropertyAnimation_0_user_data->target = TargetObject;
-    PropertyAnimation_0_user_data->imgset = (lv_img_dsc_t **)ui_imgset_maintachometer;
-    PropertyAnimation_0_user_data->imgset_size = sizeof(ui_imgset_maintachometer) / (sizeof(lv_image_dsc_t *));
-    PropertyAnimation_0_user_data->val = -1;
-    lv_anim_t PropertyAnimation_0;
-    lv_anim_init(&PropertyAnimation_0);
-    lv_anim_set_duration(&PropertyAnimation_0, 1000);
-    lv_anim_set_user_data(&PropertyAnimation_0, PropertyAnimation_0_user_data);
-    lv_anim_set_custom_exec_cb(&PropertyAnimation_0, _ui_anim_callback_set_image_frame);
-    lv_anim_set_values(&PropertyAnimation_0, 0, 60);
-    lv_anim_set_path_cb(&PropertyAnimation_0, lv_anim_path_linear);
-    lv_anim_set_delay(&PropertyAnimation_0, delay + 0);
-    lv_anim_set_deleted_cb(&PropertyAnimation_0, _ui_anim_callback_free_user_data);
-    lv_anim_set_reverse_duration(&PropertyAnimation_0, 0);
-    lv_anim_set_reverse_delay(&PropertyAnimation_0, 0);
-    lv_anim_set_repeat_count(&PropertyAnimation_0, LV_ANIM_REPEAT_INFINITE);
-    lv_anim_set_repeat_delay(&PropertyAnimation_0, 0);
-    lv_anim_set_early_apply(&PropertyAnimation_0, true);
-    lv_anim_set_get_value_cb(&PropertyAnimation_0, &_ui_anim_callback_get_image_frame);
-    out_anim = lv_anim_start(&PropertyAnimation_0);
-
-    return out_anim;
-}
 
 ///////////////////// FUNCTIONS ////////////////////
 

@@ -19,17 +19,12 @@ extern "C" {
 #include "screens/ui_Screen1.h"
 
 ///////////////////// VARIABLES ////////////////////
-extern lv_anim_t * TopTach_Animation(lv_obj_t * TargetObject, int delay);
-extern lv_anim_t * MainTachometer_Animation(lv_obj_t * TargetObject, int delay);
 
 // EVENTS
 extern lv_obj_t * ui____initial_actions0;
 
 // IMAGES AND IMAGE SETS
 LV_IMG_DECLARE(ui_img_gauge_status_dash_bg2_png);    // assets/Gauge_Status/dash_bg2.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00001_png);    // assets/Top_Tach/TopTach00001.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00060_png);    // assets/Main_Tach/MainTachometer00060.png
-LV_IMG_DECLARE(ui_img_boostmeter_png);    // assets/BoostMeter.png
 LV_IMG_DECLARE(
     ui_img_tri_state_status_tri_state_status_regular01_png);    // assets/Tri-State-Status/Tri-state-status-regular01.png
 LV_IMG_DECLARE(
@@ -51,82 +46,6 @@ LV_IMG_DECLARE(ui_img_gauge_status_gauge_tile00003_png);    // assets/Gauge_Stat
 LV_IMG_DECLARE(ui_img_gauge_status_gauge_tile00004_png);    // assets/Gauge_Status/gauge_tile00004.png
 LV_IMG_DECLARE(ui_img_gauge_status_gauge_tile00005_png);    // assets/Gauge_Status/gauge_tile00005.png
 LV_IMG_DECLARE(ui_img_gauge_status_gauge_tile00006_png);    // assets/Gauge_Status/gauge_tile00006.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00000_png);    // assets/Main_Tach/MainTachometer00000.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00001_png);    // assets/Main_Tach/MainTachometer00001.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00002_png);    // assets/Main_Tach/MainTachometer00002.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00003_png);    // assets/Main_Tach/MainTachometer00003.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00004_png);    // assets/Main_Tach/MainTachometer00004.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00005_png);    // assets/Main_Tach/MainTachometer00005.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00006_png);    // assets/Main_Tach/MainTachometer00006.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00007_png);    // assets/Main_Tach/MainTachometer00007.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00008_png);    // assets/Main_Tach/MainTachometer00008.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00009_png);    // assets/Main_Tach/MainTachometer00009.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00010_png);    // assets/Main_Tach/MainTachometer00010.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00011_png);    // assets/Main_Tach/MainTachometer00011.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00012_png);    // assets/Main_Tach/MainTachometer00012.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00013_png);    // assets/Main_Tach/MainTachometer00013.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00014_png);    // assets/Main_Tach/MainTachometer00014.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00015_png);    // assets/Main_Tach/MainTachometer00015.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00016_png);    // assets/Main_Tach/MainTachometer00016.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00017_png);    // assets/Main_Tach/MainTachometer00017.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00018_png);    // assets/Main_Tach/MainTachometer00018.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00019_png);    // assets/Main_Tach/MainTachometer00019.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00020_png);    // assets/Main_Tach/MainTachometer00020.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00021_png);    // assets/Main_Tach/MainTachometer00021.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00022_png);    // assets/Main_Tach/MainTachometer00022.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00023_png);    // assets/Main_Tach/MainTachometer00023.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00024_png);    // assets/Main_Tach/MainTachometer00024.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00025_png);    // assets/Main_Tach/MainTachometer00025.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00026_png);    // assets/Main_Tach/MainTachometer00026.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00027_png);    // assets/Main_Tach/MainTachometer00027.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00028_png);    // assets/Main_Tach/MainTachometer00028.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00029_png);    // assets/Main_Tach/MainTachometer00029.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00030_png);    // assets/Main_Tach/MainTachometer00030.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00031_png);    // assets/Main_Tach/MainTachometer00031.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00032_png);    // assets/Main_Tach/MainTachometer00032.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00033_png);    // assets/Main_Tach/MainTachometer00033.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00034_png);    // assets/Main_Tach/MainTachometer00034.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00035_png);    // assets/Main_Tach/MainTachometer00035.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00036_png);    // assets/Main_Tach/MainTachometer00036.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00037_png);    // assets/Main_Tach/MainTachometer00037.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00038_png);    // assets/Main_Tach/MainTachometer00038.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00039_png);    // assets/Main_Tach/MainTachometer00039.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00040_png);    // assets/Main_Tach/MainTachometer00040.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00041_png);    // assets/Main_Tach/MainTachometer00041.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00042_png);    // assets/Main_Tach/MainTachometer00042.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00043_png);    // assets/Main_Tach/MainTachometer00043.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00044_png);    // assets/Main_Tach/MainTachometer00044.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00045_png);    // assets/Main_Tach/MainTachometer00045.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00046_png);    // assets/Main_Tach/MainTachometer00046.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00047_png);    // assets/Main_Tach/MainTachometer00047.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00048_png);    // assets/Main_Tach/MainTachometer00048.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00049_png);    // assets/Main_Tach/MainTachometer00049.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00050_png);    // assets/Main_Tach/MainTachometer00050.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00051_png);    // assets/Main_Tach/MainTachometer00051.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00052_png);    // assets/Main_Tach/MainTachometer00052.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00053_png);    // assets/Main_Tach/MainTachometer00053.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00054_png);    // assets/Main_Tach/MainTachometer00054.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00055_png);    // assets/Main_Tach/MainTachometer00055.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00056_png);    // assets/Main_Tach/MainTachometer00056.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00057_png);    // assets/Main_Tach/MainTachometer00057.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00058_png);    // assets/Main_Tach/MainTachometer00058.png
-LV_IMG_DECLARE(ui_img_main_tach_maintachometer00059_png);    // assets/Main_Tach/MainTachometer00059.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00002_png);    // assets/Top_Tach/TopTach00002.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00003_png);    // assets/Top_Tach/TopTach00003.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00004_png);    // assets/Top_Tach/TopTach00004.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00005_png);    // assets/Top_Tach/TopTach00005.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00006_png);    // assets/Top_Tach/TopTach00006.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00007_png);    // assets/Top_Tach/TopTach00007.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00008_png);    // assets/Top_Tach/TopTach00008.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00009_png);    // assets/Top_Tach/TopTach00009.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00010_png);    // assets/Top_Tach/TopTach00010.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00011_png);    // assets/Top_Tach/TopTach00011.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00012_png);    // assets/Top_Tach/TopTach00012.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00013_png);    // assets/Top_Tach/TopTach00013.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00014_png);    // assets/Top_Tach/TopTach00014.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00015_png);    // assets/Top_Tach/TopTach00015.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00016_png);    // assets/Top_Tach/TopTach00016.png
-LV_IMG_DECLARE(ui_img_top_tach_toptach00017_png);    // assets/Top_Tach/TopTach00017.png
 
 // FONTS
 LV_FONT_DECLARE(ui_font_BOOST);
