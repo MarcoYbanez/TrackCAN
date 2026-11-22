@@ -9,7 +9,10 @@
 ## Hardware result (2026-11-22, owner's Teensy 4.1)  [verified: observed]
 - Flashed with the PROGRAM button, the app enumerated as "TrackCAN DataLogger" and `scripts/teensy_usb_flash.sh` took it into HalfKay (16C0:0478), flashed and rebooted with **no button press**. Repeated twice. So `bkpt #251` under Zephyr 4.4 does reach the bootloader; the Zephyr HardFault handler did not get in the way.
 - First attempt failed for a different reason: with default stack sizes the USB stack hit an MPU stack overflow ~10 ms after boot (no USB port, console showed the fault). Fixed in prj.conf (UDC workqueue, USBD thread, system workqueue, main, ISR stacks).
-- Not yet checked: that opening the port at 115200 does not reboot; the PROGRAM button after this firmware; CAN traffic during the request.
+- Opening the port at 1200, 9600, 38400, 57600 and 115200: no reboot, no fault, console loop kept running, USB port stayed.
+- Five reboot-and-flash cycles in a row from the script: all succeeded, the app came back on USB each time.
+- 5 minute soak: no reboot, no fault, main loop steady (329 iterations, 900 ms loop), USB port stayed.
+- Not yet checked: the PROGRAM button after this firmware (owner), CAN traffic during the request (needs a live bus), long soak beyond 5 minutes.
 
 ## What was NOT verified before the test (kept for the record)  [now resolved above for the main question; the reason it works is still not documented by PJRC]
 - **Why `bkpt #251` ends in HalfKay.** With no debugger attached a `bkpt` escalates to a HardFault. The core source does not show what catches it (presumably the Teensy's separate bootloader chip), and I found no PJRC text stating it. 
