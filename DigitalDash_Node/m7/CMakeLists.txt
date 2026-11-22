@@ -13,6 +13,8 @@ target_sources(app PRIVATE
     ../shared/dash_view.c
     ../shared/dash_geometry.c
     ../shared/dash_render.c
+    ../shared/dash_health.c
+    ../common/dash_watchdog.c
 )
 
 # The SquareLine export (images, fonts, screen). Re-export over it and rebuild: nothing here is hand-edited.
@@ -28,3 +30,9 @@ target_include_directories(app PRIVATE
     ${TRACKCAN_PATH}/can/common
     ${TRACKCAN_PATH}/can/generated
 )
+
+# Test hook: hang this core on purpose after N ms so the watchdog can be measured on the bench. Never set in a car build.
+if(DEFINED DASH_TEST_HANG_AFTER_MS)
+    target_compile_definitions(app PRIVATE DASH_TEST_HANG_AFTER_MS=${DASH_TEST_HANG_AFTER_MS})
+    message(WARNING "Dash M7: TEST BUILD, hangs after ${DASH_TEST_HANG_AFTER_MS} ms")
+endif()

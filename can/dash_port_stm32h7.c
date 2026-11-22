@@ -2,8 +2,9 @@
  * @file dash_port_stm32h7.c
  * @brief STUB. TrackCAN port for the Dash Node's STM32H7. Not implemented yet.
  *
- * The Dash toolchain (STM32Cube, Zephyr, FreeRTOS, ...) is not decided, so this only marks
- * what the port must do. Until it is filled in the Dash neither sends nor receives.
+ * The Dash runs Zephyr (M4 core). Sending and receiving are not implemented yet (TCAN-6); the clock
+ * is real, so missing data is detected: nothing ever arrives, every message goes stale or
+ * never-received, and the ethanol alert fires 2 s after start.
  *
  * TODO when the toolchain is chosen:
  *  - Configure the FDCAN peripheral in CLASSIC CAN mode (no FD frames, no bit-rate
@@ -17,6 +18,10 @@
 /*******************************************************
  * Includes
  *******************************************************/
+#ifdef __ZEPHYR__
+#include <zephyr/kernel.h>
+#endif
+
 #include "dash.h"
 
 /*******************************************************
@@ -34,9 +39,15 @@ static int stub_receive(tcan_frame_t *frame)
     return 0;
 }
 
+/* A real clock. With a constant here nothing is ever marked stale and the ethanol boot alert can
+ * never fire, which would make a live build fail open. */
 static uint32_t stub_now_ms(void)
 {
-    return 0; /* TODO: a real clock. With this stub nothing is ever marked stale. */
+#ifdef __ZEPHYR__
+    return k_uptime_get_32();
+#else
+    return 0; /* host build only: the host tests never call this port */
+#endif
 }
 
 /*******************************************************

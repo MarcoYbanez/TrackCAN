@@ -18,13 +18,16 @@
 #include <zephyr/cache.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/display.h>
+#include <zephyr/drivers/hwinfo.h>
 #include <zephyr/drivers/ipm.h>
+#include <zephyr/drivers/watchdog.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 
 #include "dash_render.h"
 #include "dash_shared.h"
 #include "dash_view.h"
+#include "dash_watchdog.h"
 #include "dash_xcore.h"
 #include "ui.h"
 
@@ -36,6 +39,16 @@ LOG_MODULE_REGISTER(dash_m7, LOG_LEVEL_INF);
 #define UI_PERIOD_MS 20
 #define READ_PERIOD_MS 50
 #define SHIFT_FLASH_MS 125 /* flash half period */
+
+/* Watchdog (IWDG1). The monitor looks every 100 ms. The render loop runs about every 20 to 30 ms
+ * and the snapshot is read every 50 ms, so 1 to 10 render and 1 to 4 read check-ins per period are
+ * expected: a stalled loop fails, so does a runaway one. Two failed periods stop the feed (200 ms)
+ * and the 300 ms hardware timeout then resets the chip, so a frozen picture stays on screen for
+ * well under a second. */
+#define WDG_PERIOD_MS 100
+#define WDG_TIMEOUT_MS 300
+#define ENTITY_RENDER 0
+#define ENTITY_READ 1
 
 #define LIGHT_CHECK_ENGINE 0x0001u
 #define LIGHT_OIL_WARNING 0x0002u
@@ -52,7 +65,10 @@ LV_DRAW_BUF_DEFINE_STATIC(l_top_buf, 461, 9, LV_COLOR_FORMAT_ARGB8888);
 static lv_obj_t *l_main_canvas;
 static lv_obj_t *l_top_canvas;
 static lv_obj_t *l_boost_fill;
-static lv_obj_t *l_alert; /* full-screen alert, hidden until needed */
+static lv_obj_t *l_alert;       /* full-screen alert, hidden until needed */
+static lv_obj_t *l_demo_banner; /* DEMO marker, shown only while the M4 reports demo data */
+static lv_obj_t *l_demo_frame;
+static dash_link_state_t l_last_state = DASH_LINK_WAITING;
 
 static uint8_t l_main_lit;
 static uint8_t l_top_lit;
@@ -132,6 +148,31 @@ static void ui_build(void)
     lv_obj_add_flag(l_boost_fill, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_to_index(l_boost_fill, 1);
 
+    /* DEMO marker, shown on every frame while the M4 reports demo data (DASH_FLAG_DEMO): a red
+     * frame round the whole screen and a red DEMO badge in the empty patch between the main bar and
+     * the lamps (measured free: x 167 to 287, y 69 to 99). */
+    l_demo_frame = lv_obj_create(ui_Screen1);
+    lv_obj_remove_style_all(l_demo_frame);
+    lv_obj_set_size(l_demo_frame, LV_PCT(100), LV_PCT(100));
+    lv_obj_align(l_demo_frame, LV_ALIGN_TOP_LEFT, 0, 0);
+    lv_obj_set_style_border_width(l_demo_frame, 4, 0);
+    lv_obj_set_style_border_color(l_demo_frame, lv_color_hex(0xFF2A2A), 0);
+    lv_obj_set_style_border_opa(l_demo_frame, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(l_demo_frame, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_add_flag(l_demo_frame, LV_OBJ_FLAG_HIDDEN);
+
+    l_demo_banner = lv_label_create(ui_Screen1);
+    lv_label_set_text(l_demo_banner, "DEMO");
+    lv_obj_set_size(l_demo_banner, 100, 30);
+    lv_obj_set_pos(l_demo_banner, 177, 70);
+    lv_obj_set_style_pad_all(l_demo_banner, 0, 0);
+    lv_obj_set_style_bg_opa(l_demo_banner, LV_OPA_COVER, 0);
+    lv_obj_set_style_bg_color(l_demo_banner, lv_color_hex(0xFF2A2A), 0);
+    lv_obj_set_style_text_color(l_demo_banner, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_text_font(l_demo_banner, &lv_font_montserrat_28, 0);
+    lv_obj_set_style_text_align(l_demo_banner, LV_TEXT_ALIGN_CENTER, 0);
+    lv_obj_add_flag(l_demo_banner, LV_OBJ_FLAG_HIDDEN);
+
     /* The alert covers everything. */
     l_alert = lv_label_create(ui_Screen1);
     lv_obj_set_size(l_alert, LV_PCT(100), LV_PCT(100)); /* resolution independent */
@@ -143,6 +184,17 @@ static void ui_build(void)
     lv_obj_set_style_pad_top(l_alert, 90, 0);
     lv_obj_align(l_alert, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_add_flag(l_alert, LV_OBJ_FLAG_HIDDEN);
+}
+
+static void show_demo(bool on)
+{
+    if (on) {
+        lv_obj_remove_flag(l_demo_frame, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_remove_flag(l_demo_banner, LV_OBJ_FLAG_HIDDEN);
+    } else {
+        lv_obj_add_flag(l_demo_frame, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_add_flag(l_demo_banner, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 static void ui_set_alert(bool on, const char *text)
@@ -230,16 +282,20 @@ static void show_snapshot(const dash_snapshot_t *s)
     int32_t coolant = d->coolant_temp_degf_x10 / 10;
     int32_t fuel = (int32_t)(d->fuel_level_pct_x10 / 10u);
 
-    /* RPM bars. The engine values come from the M4's own timer, so they are fresh with the link. */
+    /* RPM and speed are drawn only when the M4 says they are a real measurement
+     * (DASH_EXTRA_ENGINE). Without a source the bars stay empty and the speed shows "--", never a 0
+     * that looks like a stopped car. */
+    bool engine = (s->extra_valid & DASH_EXTRA_ENGINE) != 0;
+
     if (dash_bar_set_lit((uint32_t *)l_main_buf.data, l_main_buf.header.stride / 4u, &dash_main_bar,
-                         &l_main_lit, dash_main_lit(s->rpm, &l_cfg))) {
+                         &l_main_lit, engine ? dash_main_lit(s->rpm, &l_cfg) : 0)) {
         lv_obj_invalidate(l_main_canvas);
     }
     if (dash_bar_set_lit((uint32_t *)l_top_buf.data, l_top_buf.header.stride / 4u, &dash_top_bar,
-                         &l_top_lit, dash_top_lit(s->rpm, &l_cfg))) {
+                         &l_top_lit, engine ? dash_top_lit(s->rpm, &l_cfg) : 0)) {
         lv_obj_invalidate(l_top_canvas);
     }
-    if (dash_top_flash(s->rpm, &l_cfg)) {
+    if (engine && dash_top_flash(s->rpm, &l_cfg)) {
         bool on = ((k_uptime_get_32() / SHIFT_FLASH_MS) & 1u) == 0u;
 
         if (on) {
@@ -251,8 +307,13 @@ static void show_snapshot(const dash_snapshot_t *s)
         lv_obj_remove_flag(l_top_canvas, LV_OBJ_FLAG_HIDDEN);
     }
 
-    lv_label_set_text_fmt(ui_MPH_Label, "%u",
-                          (unsigned)(dash_kmh_x100_to_mph_x10(s->speed_kmh_x100) / 10u));
+    if (engine) {
+        lv_label_set_text_fmt(ui_MPH_Label, "%u",
+                              (unsigned)(dash_kmh_x100_to_mph_x10(s->speed_kmh_x100) / 10u));
+    } else {
+        lv_label_set_text(ui_MPH_Label, "--");
+    }
+    show_demo((s->flags & DASH_FLAG_DEMO) != 0);
 
     l_lvl_coolant = dash_box_level(analog, coolant, &l_cfg.coolant_degf_x10, l_lvl_coolant);
     l_lvl_oil_temp = dash_box_level(analog, oil_temp, &l_cfg.oil_temp_degf_x10, l_lvl_oil_temp);
@@ -312,8 +373,10 @@ static void show_snapshot(const dash_snapshot_t *s)
                 (unsigned)d->ethanol_pct, (unsigned)(s->afr_x10 / 10u),
                 (unsigned)(s->afr_x10 % 10u), (unsigned)(s->battery_volts_x10 / 10u),
                 (unsigned)(s->battery_volts_x10 % 10u));
-        LOG_INF("fresh: analog %d  ethanol %d  lights %d  lights 0x%03x", analog, eth, lights,
-                (unsigned)d->lights);
+        LOG_INF(
+            "fresh: analog %d  ethanol %d  lights %d  lights 0x%03x  demo %d  engine %d  alert %d",
+            analog, eth, lights, (unsigned)d->lights, (s->flags & DASH_FLAG_DEMO) != 0, engine,
+            d->ethanol_alert);
     }
 
     /* Lamps: the ones with a CAN source (the car's own lamps through opto-couplers). The others
@@ -354,10 +417,20 @@ int main(void)
     dash_snapshot_t snap;
     uint32_t heartbeat = 0;
     int64_t next_read = 0;
+    uint32_t reset_cause = 0;
+    const struct device *const wdt = DEVICE_DT_GET(DT_NODELABEL(iwdg1));
+    const dash_health_cfg_t health = {
+        .count = 2, .min_per_period = {1, 1}, .max_per_period = {10, 4}, .fail_cycles = 2};
 
     if (!device_is_ready(display)) {
         LOG_ERR("display not ready");
         return 0;
+    }
+
+    if (hwinfo_get_reset_cause(&reset_cause) == 0) {
+        LOG_INF("boot: last reset cause 0x%x%s", (unsigned)reset_cause,
+                (reset_cause & RESET_WATCHDOG) ? " (WATCHDOG)" : "");
+        (void)hwinfo_clear_reset_cause();
     }
 
     dash_xcore_clock_on();
@@ -375,6 +448,18 @@ int main(void)
     dash_link_init(&link, k_uptime_get_32());
     LOG_INF("boot: UI built, display on at %u ms after kernel start", (unsigned)k_uptime_get_32());
 
+    /* Supervised from here on. If the watchdog cannot start, do not run unsupervised: say so on
+     * screen and stop. */
+    if (dash_watchdog_start(wdt, &health, WDG_PERIOD_MS, WDG_TIMEOUT_MS,
+                            WDT_OPT_PAUSE_HALTED_BY_DBG) < 0) {
+        LOG_ERR("watchdog failed to start");
+        ui_set_alert(true, "WATCHDOG\nFAILED");
+        for (;;) {
+            lv_timer_handler();
+            k_msleep(UI_PERIOD_MS);
+        }
+    }
+
     for (;;) {
         int64_t now = k_uptime_get();
 
@@ -384,6 +469,14 @@ int main(void)
                 dash_link_update(&link, r == DASH_READ_OK, heartbeat, (uint32_t)now);
 
             next_read = now + READ_PERIOD_MS;
+            dash_watchdog_checkin(ENTITY_READ);
+
+            if (state != l_last_state) {
+                static const char *const names[] = {"WAITING", "UP", "LOST"};
+
+                LOG_INF("link %s -> %s", names[l_last_state], names[state]);
+                l_last_state = state;
+            }
 
             if (r == DASH_READ_LAYOUT_MISMATCH) {
                 /* The two images were built from different layouts: never draw their data. */
@@ -406,10 +499,18 @@ int main(void)
         }
 
         lv_timer_handler();
+        dash_watchdog_checkin(ENTITY_RENDER);
         if (!l_boot_frame_logged) {
             l_boot_frame_logged = true;
             LOG_INF("boot: first frame drawn at %u ms", (unsigned)k_uptime_get_32());
         }
+#ifdef DASH_TEST_HANG_AFTER_MS
+        if (k_uptime_get_32() > DASH_TEST_HANG_AFTER_MS) {
+            for (;;) {
+                /* TEST ONLY: a busy hang. The watchdog must reset the chip. */
+            }
+        }
+#endif
         k_msleep(UI_PERIOD_MS);
     }
     return 0;

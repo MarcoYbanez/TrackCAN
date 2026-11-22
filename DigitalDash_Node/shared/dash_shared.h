@@ -35,7 +35,7 @@
 /* Layout tag: bump the version whenever the snapshot or its meaning changes. The size is part of
  * the tag, so reflashing only one core after a struct change is refused instead of misread. */
 #define DASH_LAYOUT_VERSION                                                                        \
-    3u /* 3: boost, battery, AFR and gear added; 2: lights widened to 16 bits */
+    4u /* 4: flags and engine-valid; 3: boost, battery, AFR, gear; 2: 16-bit lights */
 #define DASH_LAYOUT_TAG ((DASH_LAYOUT_VERSION << 16) | (uint32_t)sizeof(dash_snapshot_t))
 
 /* Fields with no CAN source yet (TCAN-4). The real M4 leaves them unset, so the screen shows "--".
@@ -44,6 +44,12 @@
 #define DASH_EXTRA_BATTERY 0x02u
 #define DASH_EXTRA_AFR 0x04u
 #define DASH_EXTRA_GEAR 0x08u
+#define DASH_EXTRA_ENGINE                                                                          \
+    0x10u /* rpm and speed come from a real measurement (TCAN-7); without it they show "--" */
+
+/* Mode flags, set by the M4 image. DEMO is a compile-time constant of the demo build, so a live
+ * image cannot set it. */
+#define DASH_FLAG_DEMO 0x01u
 
 /*******************************************************
  * Type Definitions
@@ -58,6 +64,7 @@ typedef struct {
     uint16_t afr_x10;           /* 0.1 per bit. Valid only if DASH_EXTRA_AFR is set */
     uint8_t gear;               /* 0 neutral, 1 to 5. Valid only if DASH_EXTRA_GEAR is set */
     uint8_t extra_valid;        /* DASH_EXTRA_* bits: a field is shown only if its bit is set */
+    uint8_t flags;              /* DASH_FLAG_* bits */
 } dash_snapshot_t;
 
 typedef struct {
