@@ -1,0 +1,24 @@
+SET(SOURCES screens/ui_Screen1.c
+    ui.c
+    components/ui_comp_hook.c
+    ui_helpers.c
+    images/ui_img_gauge_status_dash_bg2_png.c
+    images/ui_img_tri_state_status_tri_state_status_regular01_png.c
+    images/ui_img_tri_state_status_tri_state_status_regular02_png.c
+    images/ui_img_tri_state_status_tri_state_status_regular03_png.c
+    images/ui_img_tri_state_status_tri_state_status_regular04_png.c
+    images/ui_img_tri_state_status_tri_state_status_regular05_png.c
+    images/ui_img_tri_state_status_tri_state_status_regular06_png.c
+    images/ui_img_tri_state_status_tri_state_status_regular07_png.c
+    images/ui_img_gauge_status_gauge_tile00000_png.c
+    images/ui_img_gauge_status_gauge_tile00001_png.c
+    images/ui_img_gauge_status_gauge_tile00002_png.c
+    images/ui_img_gauge_status_gauge_tile00003_png.c
+    images/ui_img_gauge_status_gauge_tile00004_png.c
+    images/ui_img_gauge_status_gauge_tile00005_png.c
+    images/ui_img_gauge_status_gauge_tile00006_png.c
+    fonts/ui_font_BOOST.c
+    fonts/ui_font_Gauges.c
+    fonts/ui_font_MPH.c)
+
+add_library(ui ${SOURCES})

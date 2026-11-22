@@ -19,7 +19,7 @@ BO_ 512 DataLogger_Analog: 8 DataLogger
  SG_ CoolantTemp : 32|16@1- (0.1,0) [-3276.8|3276.7] "degC" Dash
  SG_ FuelLevel : 48|16@1+ (0.1,0) [0|6553.5] "%" Dash
 
-BO_ 513 DataLogger_Lights: 1 DataLogger
+BO_ 513 DataLogger_Lights: 2 DataLogger
  SG_ CheckEngine : 0|1@1+ (1,0) [0|1] "" Dash
  SG_ OilWarning : 1|1@1+ (1,0) [0|1] "" Dash
  SG_ LeftTurn : 2|1@1+ (1,0) [0|1] "" Dash
@@ -28,6 +28,7 @@ BO_ 513 DataLogger_Lights: 1 DataLogger
  SG_ FuelLow : 5|1@1+ (1,0) [0|1] "" Dash
  SG_ EBrake : 6|1@1+ (1,0) [0|1] "" Dash
  SG_ HighBeam : 7|1@1+ (1,0) [0|1] "" Dash
+ SG_ ChargeWarning : 8|1@1+ (1,0) [0|1] "" Dash
 
 BO_ 768 Ethanol_Data: 4 Ethanol
  SG_ EthanolContent : 0|8@1+ (1,0) [0|100] "%" Dash,DataLogger

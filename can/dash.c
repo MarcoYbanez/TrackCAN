@@ -90,7 +90,7 @@ void dash_can_get_display(struct dash_display *out)
 
     out->lights_state = tcan_rx_get(&l_can, TCAN_MSG_DATALOGGER_LIGHTS, buf);
     if (out->lights_state != TCAN_RX_NEVER) {
-        out->lights = buf[0];
+        out->lights = (uint16_t)(buf[0] | (buf[1] << 8));
     }
 
     out->ethanol_state = tcan_rx_get(&l_can, TCAN_MSG_ETHANOL_DATA, buf);

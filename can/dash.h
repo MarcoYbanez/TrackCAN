@@ -30,7 +30,8 @@ struct dash_display {
     uint16_t fuel_level_pct_x10;
 
     tcan_rx_state_t lights_state;
-    uint8_t lights; /* bit 0 check engine ... bit 7 high beam, see can/trackcan.dbc */
+    uint16_t lights; /* bit 0 check engine ... bit 7 high beam, bit 8 charge warning, see
+                        can/trackcan.dbc */
 
     tcan_rx_state_t ethanol_state;
     uint8_t ethanol_pct;

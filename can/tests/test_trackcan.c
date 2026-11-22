@@ -116,7 +116,7 @@ static void test_message_table(void)
     } expect[] = {
         {TCAN_MSG_DASH_ENGINE, 0x100, 4, 20, TCAN_NODE_DASH},
         {TCAN_MSG_DATALOGGER_ANALOG, 0x200, 8, 50, TCAN_NODE_DATALOGGER},
-        {TCAN_MSG_DATALOGGER_LIGHTS, 0x201, 1, 100, TCAN_NODE_DATALOGGER},
+        {TCAN_MSG_DATALOGGER_LIGHTS, 0x201, 2, 100, TCAN_NODE_DATALOGGER},
         {TCAN_MSG_ETHANOL_DATA, 0x300, 4, 100, TCAN_NODE_ETHANOL},
         {TCAN_MSG_HEARTBEAT_DASH, 0x701, 2, 1000, TCAN_NODE_DASH},
         {TCAN_MSG_HEARTBEAT_DATALOGGER, 0x702, 2, 1000, TCAN_NODE_DATALOGGER},
@@ -162,17 +162,18 @@ static void test_pack_known_bytes(void)
         CHECK_BYTES(buf, want);
     }
 
-    /* DataLogger_Lights: bit 0 check engine ... bit 7 high beam. Left turn (bit 2) + high
-     * beam (bit 7) = 0x84. */
+    /* DataLogger_Lights: byte 0 bit 0 check engine ... bit 7 high beam, byte 1 bit 0 charge
+     * warning. Left turn (bit 2) + high beam (bit 7) = 0x84; charge warning = 0x01 in byte 1. */
     {
         struct trackcan_data_logger_lights_t s;
-        static const uint8_t want[] = {0x84};
+        static const uint8_t want[] = {0x84, 0x01};
 
         memset(&s, 0, sizeof(s));
         s.left_turn = 1;
         s.high_beam = 1;
+        s.charge_warning = 1;
         memset(buf, 0xEE, sizeof(buf));
-        CHECK(trackcan_data_logger_lights_pack(buf, &s, sizeof(buf)) == 1);
+        CHECK(trackcan_data_logger_lights_pack(buf, &s, sizeof(buf)) == 2);
         CHECK_BYTES(buf, want);
     }
 
@@ -226,7 +227,7 @@ static void test_unpack_known_bytes(void)
 {
     /* Decode hand-written bytes (the reverse direction, also independent of pack). */
     static const uint8_t analog[] = {0xC2, 0x01, 0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
-    static const uint8_t lights[] = {0x01};
+    static const uint8_t lights[] = {0x01, 0x01};
     struct trackcan_data_logger_analog_t a;
     struct trackcan_data_logger_lights_t l;
 
@@ -239,6 +240,7 @@ static void test_unpack_known_bytes(void)
     CHECK(trackcan_data_logger_lights_unpack(&l, lights, sizeof(lights)) == 0);
     CHECK(l.check_engine == 1);
     CHECK(l.high_beam == 0);
+    CHECK(l.charge_warning == 1);
 
     /* Too-short buffers are rejected rather than read out of bounds. */
     CHECK(trackcan_data_logger_analog_unpack(&a, analog, 7) != 0);
@@ -375,7 +377,7 @@ static void test_dash_display_and_publish(void)
     struct dash_display d;
     /* DataLogger_Analog, hand-computed: 4.50 bar, -40.0 C, 95.0 C, 75.5 %. */
     static const uint8_t analog[] = {0xC2, 0x01, 0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
-    static const uint8_t lights[] = {0x84};
+    static const uint8_t lights[] = {0x84, 0x01};
     static const uint8_t ethanol[] = {0x55, 0x85, 0xFF, 0x23}; /* 85 %, -12.3 C, Holding */
 
     fake_reset();
@@ -385,7 +387,7 @@ static void test_dash_display_and_publish(void)
 
     l_now = 5000;
     fake_inject(0x200, 8, analog);
-    fake_inject(0x201, 1, lights);
+    fake_inject(0x201, 2, lights);
     fake_inject(0x300, 4, ethanol);
     dash_can_step();
     dash_can_get_display(&d);
@@ -395,7 +397,7 @@ static void test_dash_display_and_publish(void)
     CHECK(d.oil_temp_degf_x10 == -400);     /* -40.0 C = -40.0 F */
     CHECK(d.coolant_temp_degf_x10 == 2030); /* 95.0 C = 203.0 F */
     CHECK(d.fuel_level_pct_x10 == 755);
-    CHECK(d.lights_state == TCAN_RX_FRESH && d.lights == 0x84);
+    CHECK(d.lights_state == TCAN_RX_FRESH && d.lights == 0x184); /* byte 1 bit 0 is bit 8 */
     CHECK(d.ethanol_state == TCAN_RX_FRESH && d.ethanol_pct == 85);
     CHECK(d.fuel_temp_degf_x10 == 99); /* -12.3 C = 9.86 F = 98.6 tenths, rounds to 99 */
     CHECK(d.fuel_temp_valid);
