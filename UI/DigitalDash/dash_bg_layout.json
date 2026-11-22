@@ -1,0 +1,990 @@
+{
+ "source": "UI/DigitalDash/assets/Gauge_Status/dash_bg2.png",
+ "size": [
+  480,
+  272
+ ],
+ "background_colour": "#000000",
+ "note": "Coordinates are pixels from the top-left of the 480x272 screen. Colours are the OFF (unlit) colours baked into the image. Words are named by reading the image: see 'captions'.",
+ "top_bar_off_segments": [
+  {
+   "x": 10,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 215,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 39,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 215,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 68,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 216,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 97,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 216,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 126,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 216,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 155,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 215,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 184,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 215,
+   "colour": "#0E1620",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 213,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 215,
+   "colour": "#0E1620",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 242,
+   "y": 8,
+   "w": 26,
+   "h": 8,
+   "pixels": 208,
+   "colour": "#0E1620",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 271,
+   "y": 8,
+   "w": 26,
+   "h": 8,
+   "pixels": 208,
+   "colour": "#0E1620",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 300,
+   "y": 8,
+   "w": 26,
+   "h": 8,
+   "pixels": 208,
+   "colour": "#0E1620",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 328,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 215,
+   "colour": "#0E1620",
+   "lit_colour": "#FF4014",
+   "zone": "red"
+  },
+  {
+   "x": 357,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 215,
+   "colour": "#0E1620",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 386,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 216,
+   "colour": "#0E1620",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 415,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 216,
+   "colour": "#0E1620",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 444,
+   "y": 8,
+   "w": 27,
+   "h": 8,
+   "pixels": 216,
+   "colour": "#0E1620",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  }
+ ],
+ "main_bar_off_segments": [
+  {
+   "x": 10,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 18,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 26,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 33,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 41,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 49,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 57,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 64,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 72,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 80,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 87,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 95,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 103,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 111,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 118,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 126,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 134,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 141,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 149,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 157,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 164,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 172,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 180,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 188,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 195,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 203,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 211,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 218,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 226,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 234,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 241,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 249,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 257,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 265,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 272,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 280,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 288,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 295,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 303,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 311,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 318,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 326,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 334,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 342,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#0E1620",
+   "lit_colour": "#00E0FF",
+   "zone": "cyan"
+  },
+  {
+   "x": 349,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#2A2008",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 357,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A2008",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 365,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A2008",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 372,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#2A2008",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 380,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A2008",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 388,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A2008",
+   "lit_colour": "#FFB300",
+   "zone": "amber"
+  },
+  {
+   "x": 395,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 403,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 411,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 418,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 426,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 434,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 442,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 449,
+   "y": 20,
+   "w": 7,
+   "h": 38,
+   "pixels": 266,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 457,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  },
+  {
+   "x": 465,
+   "y": 20,
+   "w": 6,
+   "h": 38,
+   "pixels": 228,
+   "colour": "#2A0606",
+   "lit_colour": "#FF1A1A",
+   "zone": "red"
+  }
+ ],
+ "lamp_outlines": [
+  {
+   "x": 10,
+   "y": 74,
+   "w": 20,
+   "h": 13,
+   "pixels": 260,
+   "colour": "#0A0F17"
+  },
+  {
+   "x": 33,
+   "y": 74,
+   "w": 20,
+   "h": 13,
+   "pixels": 260,
+   "colour": "#0A0F17"
+  },
+  {
+   "x": 56,
+   "y": 74,
+   "w": 20,
+   "h": 13,
+   "pixels": 260,
+   "colour": "#0A0F17"
+  },
+  {
+   "x": 78,
+   "y": 74,
+   "w": 21,
+   "h": 13,
+   "pixels": 273,
+   "colour": "#0A0F17"
+  },
+  {
+   "x": 101,
+   "y": 74,
+   "w": 21,
+   "h": 13,
+   "pixels": 273,
+   "colour": "#0A0F17"
+  },
+  {
+   "x": 124,
+   "y": 74,
+   "w": 20,
+   "h": 13,
+   "pixels": 260,
+   "colour": "#0A0F17"
+  },
+  {
+   "x": 147,
+   "y": 74,
+   "w": 20,
+   "h": 13,
+   "pixels": 260,
+   "colour": "#0A0F17"
+  }
+ ],
+ "scale_digits_left_to_right": [
+  {
+   "x": 10,
+   "y": 63,
+   "w": 5,
+   "h": 6,
+   "pixels": 23,
+   "colour": "#3A3F45"
+  },
+  {
+   "x": 61,
+   "y": 63,
+   "w": 4,
+   "h": 6,
+   "pixels": 11,
+   "colour": "#616973"
+  },
+  {
+   "x": 112,
+   "y": 63,
+   "w": 4,
+   "h": 6,
+   "pixels": 16,
+   "colour": "#4D535C"
+  },
+  {
+   "x": 162,
+   "y": 63,
+   "w": 5,
+   "h": 6,
+   "pixels": 17,
+   "colour": "#272A2E"
+  },
+  {
+   "x": 213,
+   "y": 63,
+   "w": 4,
+   "h": 6,
+   "pixels": 19,
+   "colour": "#3A3F45"
+  },
+  {
+   "x": 263,
+   "y": 63,
+   "w": 5,
+   "h": 6,
+   "pixels": 17,
+   "colour": "#4D545C"
+  },
+  {
+   "x": 314,
+   "y": 63,
+   "w": 4,
+   "h": 6,
+   "pixels": 19,
+   "colour": "#4D545C"
+  },
+  {
+   "x": 365,
+   "y": 63,
+   "w": 4,
+   "h": 6,
+   "pixels": 12,
+   "colour": "#4D545C"
+  },
+  {
+   "x": 415,
+   "y": 63,
+   "w": 5,
+   "h": 6,
+   "pixels": 20,
+   "colour": "#3A3F45"
+  },
+  {
+   "x": 466,
+   "y": 63,
+   "w": 4,
+   "h": 6,
+   "pixels": 18,
+   "colour": "#131517"
+  }
+ ],
+ "boost_track": [
+  {
+   "x": 308,
+   "y": 177,
+   "w": 163,
+   "h": 8,
+   "pixels": 1304,
+   "colour": "#0E1620"
+  }
+ ],
+ "captions": [
+  {
+   "x": 412,
+   "y": 85,
+   "w": 15,
+   "h": 6,
+   "colour": "#616873",
+   "letters": 3,
+   "text": "RPM"
+  },
+  {
+   "x": 10,
+   "y": 99,
+   "w": 35,
+   "h": 6,
+   "colour": "#3A3F45",
+   "letters": 5,
+   "text": "SPEED"
+  },
+  {
+   "x": 308,
+   "y": 99,
+   "w": 35,
+   "h": 6,
+   "colour": "#4D545C",
+   "letters": 5,
+   "text": "BOOST"
+  },
+  {
+   "x": 308,
+   "y": 158,
+   "w": 22,
+   "h": 7,
+   "colour": "#4D545C",
+   "letters": 3,
+   "text": "BAR"
+  },
+  {
+   "x": 10,
+   "y": 209,
+   "w": 27,
+   "h": 7,
+   "colour": "#3A3F45",
+   "letters": 3,
+   "text": "MPH"
+  }
+ ],
+ "screen_border": {
+  "x": 0,
+  "y": 0,
+  "w": 480,
+  "h": 272,
+  "colour": "#17202A",
+  "letters": 1
+ },
+ "zone_counts": {
+  "main_bar": {
+   "cyan": 44,
+   "amber": 6,
+   "red": 10
+  },
+  "top_bar": {
+   "cyan": 6,
+   "amber": 5,
+   "red": 5
+  }
+ }
+}

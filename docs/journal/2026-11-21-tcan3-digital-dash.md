@@ -127,6 +127,25 @@ instance maps to which core on this chip.
   The real tach must be set from the RPM value in code.
 - The design has labels for MPH, coolant, oil pressure and **AFR**; AFR is not in the CAN catalog yet.
 
+### Dash screen layout, saved before the background image is removed from SquareLine
+
+`UI/DigitalDash/dash_bg_layout.json` (made by `scripts/extract_dash_layout.py` from
+`UI/DigitalDash/assets/Gauge_Status/dash_bg2.png`, which is also committed in git) records everything the
+480x272 background image contains. **[verified]** by pixel analysis:
+
+- **RPM bars (off state):** 60 main segments at 7 px pitch from x=10, y=20, 7 x 38 px (44 cyan-off `#0E1620`, 6
+  amber-off `#2A2008`, 10 red-off `#2A0606`); 16 top segments 27 px wide, 8 px tall, y=8, from x=10.
+  Lit colours: cyan `#00E0FF`, amber `#FFB300`, red `#FF1A1A` (one `#FF4014`). Zones: main bar 44/6/10, top bar 6/5/5.
+- **7 lamp outlines** (CEL, OIL, BAT, TMP, TC, CAN, GPS) at y=74, about 20 x 13 px, x = 10, 33, 56, 78, 101, 124, 147.
+- **Scale digits 0 to 9** at y=63, x = 10, 61, 112, 162, 213, 263, 314, 365, 415, 466.
+- **Boost track** 163 x 8 px at (308, 177).
+- **Captions:** RPM (412,85), SPEED (10,99), BOOST (308,99), **BAR** (308,158), MPH (10,209).
+- The lit segments are drawn exactly on the off segments, so the background can also be recreated from this file.
+
+**Decision recorded:** the RPM bars are drawn in code; lamps are red, normal or dimmed cyan; gauge tiles are
+border-only art tinted by status; thresholds are variables (TCAN-5). Note: the baked caption says **BAR**
+for boost but the owner wants **PSI**, so that caption must change (edit the PNG, or cover it with a label).
+
 ## Risks and unknowns
 
 - **FDCAN on the M4 (M2):** the board devicetree enables FDCAN for the M7. For the M4 the peripheral must be
