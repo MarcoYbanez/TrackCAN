@@ -121,3 +121,13 @@ Known consequences to watch on the car:
 - The lights message is now 2 bytes. A DataLogger still sending the old 1-byte frame is rejected by the new Dash (lamps
   stay dim, fail closed); flash both. The dash layout tag moved to version 2.
 - The DataLogger must set `ChargeWarning` and `FuelLow` from the opto-coupler inputs (TCAN-4). Nothing sets them yet.
+
+## Full-screen oil pressure error (owner decision, 2026-11-22)
+
+The owner named oil pressure as a case for the full-screen error (the ethanol problem stays in its own box). Implemented as a
+separate SEVERE level above the 15 psi box: **at or below 2.1 psi** (the car's own oil pressure warning switch trips below
+14.7 kPa = 2.1 psi, service manual `IDI-5`, [verified], see above), **with the engine really running** (a real RPM measurement of
+500 or more: my choice, above cranking and below idle), **held for 1 s** (mine, so the pressure building after a start and a one-sample
+blip do not trigger it), clearing above 3.1 psi (mine). Variables in `dash_thresholds.h`. Tested on the host (197 checks, 9 deliberate
+bugs caught) and on the board: during the demo's injected pressure sag it came on for exactly the sag and at no other time in 115 s.
+Limit: with no RPM measurement (a live image before TCAN-7) "engine running" is unknown, so it cannot fire; the red box still works.

@@ -69,7 +69,8 @@ static lv_obj_t *l_alert;       /* full-screen alert, hidden until needed */
 static lv_obj_t *l_demo_banner; /* DEMO marker, shown only while the M4 reports demo data */
 static lv_obj_t *l_demo_frame;
 static dash_link_state_t l_last_state = DASH_LINK_WAITING;
-static dash_level_t l_eth_level; /* what the ethanol box shows, for the console */
+static dash_oil_crit_t l_oil_crit; /* full-screen low oil pressure error */
+static dash_level_t l_eth_level;   /* what the ethanol box shows, for the console */
 
 static uint8_t l_main_lit;
 static uint8_t l_top_lit;
@@ -432,9 +433,14 @@ static void show_snapshot(const dash_snapshot_t *s)
     }
     show_lamp(ui_GPS_REG, DASH_LAMP_NOT_LIT);
 
-    /* A good snapshot means the link is up and the layouts match, so any full-screen error from
-     * before is over. */
-    ui_set_alert(false, "");
+    /* A good snapshot means the link is up and the layouts match, so a full-screen error from
+     * before is over. The one full-screen error that belongs to the data itself is low oil pressure
+     * with the engine really running (the owner's choice; see dash_thresholds.h). It needs fresh
+     * analog data and a real RPM measurement, so with no RPM source (a live image before TCAN-7) it
+     * cannot fire. */
+    ui_set_alert(dash_oil_critical(&l_oil_crit, k_uptime_get_32(), analog, engine, s->rpm,
+                                   d->oil_pressure_psi_x10, &l_cfg),
+                 "LOW OIL\nPRESSURE");
 }
 
 /* Reads one consistent snapshot under the hardware semaphore. */
