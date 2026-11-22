@@ -28,7 +28,8 @@ struct datalogger_sample {
     int16_t oil_temp_degc_x10;
     int16_t coolant_temp_degc_x10;
     uint16_t fuel_level_pct_x10;
-    uint8_t lights; /* bit 0 check engine ... bit 7 high beam, see can/trackcan.dbc */
+    uint16_t lights; /* bit 0 check engine ... bit 7 high beam, bit 8 charge warning, see
+                        can/trackcan.dbc */
 };
 
 /*******************************************************

@@ -121,7 +121,7 @@ static void test_layout_mismatch(void)
     uint32_t hb = 0;
 
     /* Hand-computed: version 1 in the high half, the snapshot size in the low half. */
-    CHECK(DASH_LAYOUT_TAG == ((1u << 16) | (uint32_t)sizeof(dash_snapshot_t)));
+    CHECK(DASH_LAYOUT_TAG == ((2u << 16) | (uint32_t)sizeof(dash_snapshot_t))); /* version 2: 16-bit lights */
 
     dash_shared_init(&sh);
     dash_shared_write(&sh, &(dash_snapshot_t){.rpm = 1234});

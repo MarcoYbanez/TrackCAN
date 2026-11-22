@@ -152,7 +152,8 @@ static void publish(void)
     }
 
     if (tcan_tx_due(&l_can, TCAN_MSG_DATALOGGER_LIGHTS)) {
-        buf[0] = s.lights;
+        buf[0] = (uint8_t)(s.lights & 0xFFu);
+        buf[1] = (uint8_t)(s.lights >> 8);
         (void)tcan_tx(&l_can, TCAN_MSG_DATALOGGER_LIGHTS, buf);
     }
 

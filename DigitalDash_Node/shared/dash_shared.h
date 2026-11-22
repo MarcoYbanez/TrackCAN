@@ -34,7 +34,7 @@
 #define DASH_READ_RETRIES 4u
 /* Layout tag: bump the version whenever the snapshot or its meaning changes. The size is part of
  * the tag, so reflashing only one core after a struct change is refused instead of misread. */
-#define DASH_LAYOUT_VERSION 1u
+#define DASH_LAYOUT_VERSION 2u /* 2: lights widened to 16 bits (charge warning) */
 #define DASH_LAYOUT_TAG ((DASH_LAYOUT_VERSION << 16) | (uint32_t)sizeof(dash_snapshot_t))
 
 /*******************************************************
