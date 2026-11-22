@@ -35,7 +35,7 @@
 /* Layout tag: bump the version whenever the snapshot or its meaning changes. The size is part of
  * the tag, so reflashing only one core after a struct change is refused instead of misread. */
 #define DASH_LAYOUT_VERSION                                                                        \
-    4u /* 4: flags and engine-valid; 3: boost, battery, AFR, gear; 2: 16-bit lights */
+    5u /* 5: CAN diagnostics; 4: flags and engine-valid; 3: boost, battery, AFR, gear */
 #define DASH_LAYOUT_TAG ((DASH_LAYOUT_VERSION << 16) | (uint32_t)sizeof(dash_snapshot_t))
 
 /* Fields with no CAN source yet (TCAN-4). The real M4 leaves them unset, so the screen shows "--".
@@ -44,6 +44,9 @@
 #define DASH_EXTRA_BATTERY 0x02u
 #define DASH_EXTRA_AFR 0x04u
 #define DASH_EXTRA_GEAR 0x08u
+#define DASH_EXTRA_CAN                                                                             \
+    0x20u /* the CAN diagnostics below are real: the CAN controller is running                     \
+           */
 #define DASH_EXTRA_ENGINE                                                                          \
     0x10u /* rpm and speed come from a real measurement (TCAN-7); without it they show "--" */
 
@@ -65,6 +68,17 @@ typedef struct {
     uint8_t gear;               /* 0 neutral, 1 to 5. Valid only if DASH_EXTRA_GEAR is set */
     uint8_t extra_valid;        /* DASH_EXTRA_* bits: a field is shown only if its bit is set */
     uint8_t flags;              /* DASH_FLAG_* bits */
+    uint8_t can_state;          /* enum dash_can_hw_state. Valid only if DASH_EXTRA_CAN is set */
+    uint8_t can_tx_err;         /* controller transmit error counter */
+    uint8_t can_rx_err;         /* controller receive error counter */
+    uint8_t can_init_step;      /* enum dash_can_init_step of a failed controller start */
+    int16_t can_init_err;       /* its negative errno */
+    uint32_t can_core_clock_hz; /* the FDCAN kernel clock the driver computes with */
+    uint16_t can_prescaler;
+    uint16_t can_tq_per_bit;
+    uint16_t can_sample_point; /* per mille, 875 = 87.5 % */
+    uint16_t can_rx_frames;    /* frames accepted by the CAN logic (wraps) */
+    uint16_t can_tx_dropped;   /* frames the port could not send (wraps) */
 } dash_snapshot_t;
 
 typedef struct {

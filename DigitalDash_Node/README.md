@@ -73,12 +73,23 @@ See `docs/user-todo/dash-todo.md` for the bench test.
 
 ## Build modes, the DEMO marker and the watchdogs (TCAN-10)
 
-**Two M4 images.** `scripts/dash_build_flash.sh build demo` (the default until the FDCAN port exists, TCAN-6) publishes the
-demo drive and sets `DASH_FLAG_DEMO` in the snapshot; the M7 then draws a **red frame round the whole screen and a red
-DEMO badge** on every frame, so the demo can never be mistaken for real readings. `build live` publishes only what the
-CAN logic received: speed, RPM, boost, battery, AFR and gear have no source yet, so they show `--` (the snapshot carries a
-validity bit for each), and with no CAN port yet the ethanol alert comes on 2 s after start. There is no runtime switch:
-the flag is a compile-time constant of the demo image, so a live image cannot set it.
+**Three M4 images** (`scripts/dash_build_flash.sh build|all live|loopback|demo`, live is the default):
+
+- `live`: the M4 runs the real FDCAN controller (FDCAN1, classic CAN, 500 kbit/s) and publishes only what it received.
+  Speed, RPM, boost, battery, AFR and gear have no source yet, so they show `--` (the snapshot carries a validity bit for each).
+  With nothing on the bus the controller goes error-passive (the CAN lamp turns red) and the ethanol alert comes on 2 s after start.
+- `loopback`: bench, no wiring. The controller runs in internal loopback and simulated DataLogger and Ethanol Nodes send real
+  TrackCAN frames through it. The data is simulated, so the DEMO marker is shown.
+- `demo`: bench. Fake values straight into the snapshot, no CAN. DEMO marker shown.
+
+The demo flag (`DASH_FLAG_DEMO`) is a compile-time constant of the loopback and demo images, and the M7 then draws a **red frame
+round the whole screen and a red DEMO badge** on every frame, so simulated data can never be mistaken for real readings.
+There is no runtime switch: a live image cannot set the flag.
+
+**CAN on the M4** (`can/dash_port_stm32h7.c`, `m4/app.overlay`): the M7 owns the clocks, so the M4 selects the FDCAN kernel clock
+itself (HSE, 25 MHz) and declares HSE enabled in its devicetree (the M4's clock driver compiles out all oscillator and PLL setup).
+The M7 console prints the controller state, error counters, frame counters, the clock and bit timing, and a failing start step with
+its errno, once a second. Details and measurements: `docs/journal/2026-11-22-tcan6-dash-m4-fdcan.md`.
 
 **Watchdogs.** Each core has its own independent hardware watchdog and a monitor thread that feeds it only while the core's
 tasks keep checking in (`shared/dash_health.c`, the same design as the Ethanol Node's AUTOSAR-style alive supervision:

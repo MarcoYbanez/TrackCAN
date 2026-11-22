@@ -4,11 +4,47 @@
  * "st,stm32-watchdog" node, so enabling only this one makes it drive IWDG2.
  */
 / {
+	chosen {
+		zephyr,canbus = &fdcan1;
+	};
+
 	soc {
 		iwdg2: watchdog@58004c00 {
 			compatible = "st,stm32-watchdog";
 			reg = <0x58004c00 0x400>;
 			status = "okay";
 		};
+	};
+};
+
+/*
+ * TrackCAN on FDCAN1 (PH13 = TX, PH14 = RX, UM2488 pin table), classic CAN, 500 kbit/s, sample point 87.5 %.
+ * The M7 owns the clock tree and does not use FDCAN; the M4 selects the FDCAN kernel clock here. HSE (25 MHz, direct from the
+ * crystal) is used, not a PLL, because the M4 does not configure PLLs: it cannot depend on one the M7 may not have started.
+ * FDCAN2 (PB5 = RX, PB13 = TX) is the other controller; swap the node and pins to use it.
+ */
+/*
+ * The M4's clock driver only accepts a clock source that its own devicetree declares enabled: asking for HSE as the FDCAN
+ * kernel clock failed with -ENOTSUP (-134) while the M4's board file left HSE disabled, because the M7 owns the clocks. This
+ * declares what the M7 already runs (X1, a 25 MHz oscillator, UM2488 section 6.5). On the M4 the clock driver compiles out
+ * all oscillator, PLL and prescaler setup (it is inside CONFIG_CPU_CORTEX_M7), so this changes no hardware setting: it only
+ * tells the driver the clock exists and its frequency.
+ */
+&clk_hse {
+	clock-frequency = <DT_FREQ_M(25)>;
+	status = "okay";
+};
+
+&fdcan1 {
+	pinctrl-0 = <&fdcan1_rx_ph14 &fdcan1_tx_ph13>;
+	pinctrl-names = "default";
+	clocks = <&rcc STM32_CLOCK(APB1_2, 8)>,
+		 <&rcc STM32_SRC_HSE FDCAN_SEL(0)>;
+	bitrate = <500000>;
+	sample-point = <875>;
+	status = "okay";
+
+	can-transceiver {
+		max-bitrate = <1000000>;
 	};
 };

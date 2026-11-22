@@ -13,6 +13,7 @@ target_sources(app PRIVATE
     ../shared/dash_shared.c
     ../shared/dash_sim.c
     ../shared/dash_health.c
+    ../shared/dash_loopback_source.c
     ../common/dash_watchdog.c
     ${TRACKCAN_PATH}/can/dash.c
     ${TRACKCAN_PATH}/can/dash_port_stm32h7.c
@@ -27,15 +28,23 @@ target_include_directories(app PRIVATE
     ${TRACKCAN_PATH}/can/generated
 )
 
-# Build mode. ON (the default until the FDCAN port exists, TCAN-6) publishes the DEMO drive and sets the DEMO flag,
-# which makes the M7 draw a DEMO banner and frame on every frame. OFF is the live image: it publishes only what the CAN
-# logic received, and shows "--" for anything it has no source for. Use: -DDASH_DEMO=OFF
-option(DASH_DEMO "Publish the demo drive (bench only); OFF builds the live image" ON)
-if(DASH_DEMO)
-    target_compile_definitions(app PRIVATE DASH_DEMO=1)
-    message(STATUS "Dash M4: DEMO image (fake data, DEMO banner on screen)")
+# Build mode (-DDASH_MODE=live|loopback|demo; the script passes it):
+#   live     the default. Real FDCAN on the bus; publishes only what the CAN logic received. Anything without a source (speed,
+#            RPM, boost, battery, AFR, gear: TCAN-7 and TCAN-4) stays invalid and shows "--".
+#   loopback bench only, no wiring. The FDCAN controller runs in internal loopback and simulated DataLogger and Ethanol Nodes
+#            (dash_loopback_source) send real TrackCAN frames through it, so the whole receive path to the screen is exercised.
+#            The data is simulated, so the DEMO flag is set.
+#   demo     bench only. Fake values straight into the snapshot, no CAN at all. DEMO flag set.
+set(DASH_MODE "live" CACHE STRING "live, loopback or demo")
+if(NOT DASH_MODE MATCHES "^(live|loopback|demo)$")
+    message(FATAL_ERROR "DASH_MODE must be live, loopback or demo (got '${DASH_MODE}')")
+endif()
+string(TOUPPER ${DASH_MODE} DASH_MODE_UPPER)
+target_compile_definitions(app PRIVATE DASH_MODE_${DASH_MODE_UPPER}=1)
+if(DASH_MODE STREQUAL "live")
+    message(STATUS "Dash M4: LIVE image (real CAN data only)")
 else()
-    message(STATUS "Dash M4: LIVE image")
+    message(STATUS "Dash M4: ${DASH_MODE_UPPER} image (simulated data, DEMO banner on screen)")
 endif()
 
 # Test hook: hang this core on purpose after N ms so the watchdog can be measured on the bench. Never set in a car build.
