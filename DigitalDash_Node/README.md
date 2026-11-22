@@ -109,3 +109,23 @@ hardware timeout then resets the chip).
   after 5 s. Never set it in a car build.
 
 The M7 console also prints the link state changes and, once a second, the flags (`demo`, `engine`, `alert`).
+
+## Alerts: what gets the full screen
+
+The full-screen error is reserved for riskier data. An ethanol problem (the Node reports a critical fault, goes silent, never
+appears, or feeds the ECU its default E85) is shown in the **ethanol box itself**: red box and red text, with `--` in red when
+there is no number to show.
+
+The full screen is used for:
+
+- the dash's own failures: the M4 link lost (NO DATA CAN CORE LOST), mismatched core images (REFLASH BOTH CORES), a watchdog that
+  could not start;
+- **LOW OIL PRESSURE** (the owner's choice): oil pressure at or below **10 psi** while the engine is really running (a real RPM
+  measurement of 500 or more), held for 1 s, clearing above 11 psi. That is under the factory minimum of 14 psi at idle and above
+  the car's own oil pressure warning switch (2.1 psi). It needs fresh analog data and a real RPM measurement, so key-on with the
+  engine off never raises it, and with no RPM source (a live image before TCAN-7) it cannot fire at all. The RPM minimum, the hold
+  time and the clear level are my choices; all four values are variables in `shared/dash_thresholds.h`. The red oil pressure box
+  (15 psi) is a separate, milder level. On the car, watch that a cold engine gets above 10 psi within 1 s of passing 500 rpm, or it
+  fires at every start.
+
+Which other data, if any, deserves the full screen is still the owner's decision.

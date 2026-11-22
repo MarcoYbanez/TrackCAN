@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "dash_sim.h"
+#include "dash_view.h"
 
 /*******************************************************
  * Macros
@@ -225,6 +226,58 @@ static void test_long_run(void)
     CHECK(seen_low_fuel && low_fuel_cleared); /* the tank runs low, then is refilled */
 }
 
+/* The full-screen low oil pressure error over 20 minutes of the demo drive: it must come on for the
+ * injected pressure sag and at no other time (not at the engine start with no pressure yet, not at
+ * a healthy hot idle, not in the pulls). */
+static void test_oil_error_only_for_the_injected_sag(void)
+{
+    dash_sim_t s;
+    dash_sim_out_t o;
+    dash_config_t cfg;
+    dash_oil_crit_t crit = {0};
+    uint32_t t_ms = 0;
+    unsigned rising_edges = 0;
+    unsigned false_alarms = 0;
+    bool was_on = false;
+    uint16_t min_pressure_running = 65535;
+    uint32_t last_sag_ms = 0;
+
+    dash_config_defaults(&cfg);
+    dash_sim_init(&s);
+    for (uint32_t i = 0; i < RUN_STEPS; i++) {
+        bool on;
+        bool in_sag = (s.loop % 3u) == 1u &&
+                      s.phase == 6u; /* the final idle of the loop with the injected fault */
+
+        t_ms += STEP_MS;
+        dash_sim_step(&s, STEP_MS, &o);
+        on = dash_oil_critical(&crit, t_ms, true, true, o.rpm, o.oil_pressure_psi_x10, &cfg);
+        if (on && !was_on) {
+            rising_edges++;
+        }
+        if (on && o.oil_pressure_psi_x10 > cfg.oil_crit_clear_psi_x10) {
+            false_alarms++; /* active while the pressure is healthy */
+        }
+        if (t_ms < 10000) {
+            CHECK(!on); /* the engine start: cranking, then the pressure building up */
+        }
+        /* Outside the injected sag (and the 1.5 s of recovery after it) the healthy pressure never
+         * gets near the limit. */
+        if (in_sag) {
+            last_sag_ms = t_ms;
+        }
+        if (o.rpm >= cfg.oil_crit_min_rpm && t_ms > 10000 && t_ms - last_sag_ms > 1500 &&
+            o.oil_pressure_psi_x10 < min_pressure_running) {
+            min_pressure_running = o.oil_pressure_psi_x10;
+        }
+        was_on = on;
+    }
+    CHECK(false_alarms == 0);
+    CHECK(rising_edges >= 8 &&
+          rising_edges <= 9); /* one sag every third 44 s loop: 20 min is about 8 or 9 of them */
+    CHECK(min_pressure_running > 110); /* outside the sag the healthy pressure never gets near it */
+}
+
 /*******************************************************
  * Public Function Definitions
  *******************************************************/
@@ -234,6 +287,7 @@ int main(void)
     test_start_up();
     test_determinism_and_bad_dt();
     test_long_run();
+    test_oil_error_only_for_the_injected_sag();
 
     printf("%d checks, %d failures\n", l_checks, l_failures);
     return l_failures == 0 ? 0 : 1;

@@ -49,6 +49,10 @@ void dash_config_defaults(dash_config_t *cfg)
     cfg->shift_end_rpm = 8500;
     cfg->shift_flash_rpm = 8500;
     cfg->boost_max_psi_x10 = 200; /* PLACEHOLDER: 20.0 PSI, the owner sets the real maximum */
+    cfg->oil_crit_psi_x10 = DASH_OIL_CRIT_PSI_X10;
+    cfg->oil_crit_clear_psi_x10 = DASH_OIL_CRIT_CLEAR_PSI_X10;
+    cfg->oil_crit_min_rpm = DASH_OIL_CRIT_MIN_RPM;
+    cfg->oil_crit_hold_ms = DASH_OIL_CRIT_HOLD_MS;
     limits_none(&cfg->coolant_degf_x10);
     cfg->coolant_degf_x10.warn_high = DASH_COOLANT_HIGH_X10;
     cfg->coolant_degf_x10.hysteresis = DASH_COOLANT_HYST_X10;
@@ -116,8 +120,36 @@ dash_lamp_t dash_lamp(bool data_valid, bool condition_active)
     return condition_active ? DASH_LAMP_ACTIVE : DASH_LAMP_NORMAL;
 }
 
-dash_level_t dash_ethanol_level(bool data_valid, bool output_is_default)
+bool dash_oil_critical(dash_oil_crit_t *st, uint32_t now_ms, bool analog_valid, bool engine_valid,
+                       uint16_t rpm, uint32_t psi_x10, const dash_config_t *cfg)
 {
+    /* Once active it stays until the pressure is back above the clear level, so it does not flicker
+     * at the limit. */
+    int64_t limit = st->active ? cfg->oil_crit_clear_psi_x10 : cfg->oil_crit_psi_x10;
+    bool cond =
+        analog_valid && engine_valid && rpm >= cfg->oil_crit_min_rpm && (int64_t)psi_x10 <= limit;
+
+    if (!cond) {
+        st->active = false;
+        st->pending = false;
+        return false;
+    }
+    if (!st->pending) {
+        st->pending = true;
+        st->since_ms = now_ms;
+    }
+    if ((uint32_t)(now_ms - st->since_ms) >= cfg->oil_crit_hold_ms) {
+        st->active = true;
+    }
+    return st->active;
+}
+
+dash_level_t dash_ethanol_level(bool data_valid, bool output_is_default, bool alert)
+{
+    if (alert) {
+        return DASH_LEVEL_ALERT; /* critical, silent or never seen: red even though there may be no
+                                    number to show */
+    }
     if (!data_valid) {
         return DASH_LEVEL_NO_DATA;
     }

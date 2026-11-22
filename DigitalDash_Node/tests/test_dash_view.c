@@ -217,11 +217,89 @@ static void test_owner_thresholds(void)
 
 static void test_ethanol_level(void)
 {
-    CHECK(dash_ethanol_level(true, false) == DASH_LEVEL_NORMAL);
-    CHECK(dash_ethanol_level(true, true) == DASH_LEVEL_ALERT); /* defaulted E85: red */
-    CHECK(dash_ethanol_level(false, false) == DASH_LEVEL_NO_DATA);
-    CHECK(dash_ethanol_level(false, true) ==
+    /* (data valid, output is default, alert) */
+    CHECK(dash_ethanol_level(true, false, false) == DASH_LEVEL_NORMAL);
+    CHECK(dash_ethanol_level(true, true, false) == DASH_LEVEL_ALERT); /* defaulted E85: red */
+    CHECK(dash_ethanol_level(false, false, false) ==
+          DASH_LEVEL_NO_DATA); /* nothing yet, nothing wrong yet */
+    CHECK(dash_ethanol_level(false, true, false) ==
           DASH_LEVEL_NO_DATA); /* stale data is no data, whatever the flag says */
+
+    /* The alert makes the box red whether or not there is a number to show: critical with data, and
+     * silent or never seen without any. */
+    CHECK(dash_ethanol_level(true, false, true) == DASH_LEVEL_ALERT);
+    CHECK(dash_ethanol_level(false, false, true) == DASH_LEVEL_ALERT);
+    CHECK(dash_ethanol_level(false, true, true) == DASH_LEVEL_ALERT);
+    CHECK(dash_ethanol_level(true, true, true) == DASH_LEVEL_ALERT);
+}
+
+static void test_oil_critical(void)
+{
+    dash_config_t c;
+    dash_oil_crit_t st = {0};
+    uint32_t t = 100000;
+
+    dash_config_defaults(&c); /* 10.0 psi, clears above 11.0 psi, 500 rpm, held 1000 ms */
+    CHECK(c.oil_crit_psi_x10 == 100 && c.oil_crit_clear_psi_x10 == 110 &&
+          c.oil_crit_min_rpm == 500 && c.oil_crit_hold_ms == 1000);
+
+    /* Key on, engine off: pressure 0 and rpm 0 is normal and must never raise it. */
+    for (int i = 0; i < 50; i++, t += 100) {
+        CHECK(!dash_oil_critical(&st, t, true, true, 0, 0, &c));
+    }
+    /* Cranking (about 250 rpm, no pressure yet) is not "running" either. */
+    for (int i = 0; i < 20; i++, t += 100) {
+        CHECK(!dash_oil_critical(&st, t, true, true, 250, 0, &c));
+    }
+
+    /* The engine fires and the pressure builds: low for under 1 s, then fine. */
+    CHECK(!dash_oil_critical(&st, t, true, true, 850, 5, &c));
+    CHECK(!dash_oil_critical(&st, t + 900, true, true, 850, 8, &c)); /* 900 ms: not yet */
+    CHECK(!dash_oil_critical(&st, t + 950, true, true, 850, 180,
+                             &c)); /* pressure came up: the timer is cleared */
+    t += 1000;
+
+    /* A real loss of pressure at idle: held 1000 ms, then it fires. */
+    CHECK(!dash_oil_critical(&st, t, true, true, 850, 10, &c));       /* 1.0 psi, starts timing */
+    CHECK(!dash_oil_critical(&st, t + 999, true, true, 850, 10, &c)); /* 999 ms */
+    CHECK(dash_oil_critical(&st, t + 1000, true, true, 850, 10, &c)); /* 1000 ms: fires */
+    CHECK(dash_oil_critical(&st, t + 5000, true, true, 850, 10, &c));
+
+    /* Hysteresis: stays active up to 11.0 psi, clears above it. */
+    CHECK(dash_oil_critical(&st, t + 5100, true, true, 850, 110, &c));  /* 11.0 psi: still active */
+    CHECK(!dash_oil_critical(&st, t + 5200, true, true, 850, 111, &c)); /* 11.1 psi: clear */
+    CHECK(!dash_oil_critical(&st, t + 5300, true, true, 850, 105,
+                             &c)); /* 10.5 psi is above the 10.0 start level */
+
+    /* The threshold itself is inclusive: 10.0 psi counts, 10.1 psi does not. A healthy hot idle (14
+     * psi, the factory minimum) and the red-box level (15 psi) never reach it. */
+    st = (dash_oil_crit_t){0};
+    CHECK(!dash_oil_critical(&st, 0, true, true, 3000, 101, &c));
+    CHECK(!dash_oil_critical(&st, 5000, true, true, 3000, 101, &c));
+    CHECK(!dash_oil_critical(&st, 5100, true, true, 800, 140, &c));
+    CHECK(!dash_oil_critical(&st, 9000, true, true, 800, 149, &c));
+    CHECK(!dash_oil_critical(&st, 20000, true, true, 3000, 100, &c));
+    CHECK(dash_oil_critical(&st, 21000, true, true, 3000, 100, &c));
+
+    /* Stale or missing data never raises it, and an active error ends when the data goes. */
+    CHECK(!dash_oil_critical(&st, 7100, false, true, 3000, 10, &c)); /* analog stale */
+    st = (dash_oil_crit_t){0};
+    CHECK(!dash_oil_critical(&st, 0, true, false, 3000, 10,
+                             &c)); /* no real rpm measurement: cannot tell it is running */
+    CHECK(!dash_oil_critical(&st, 5000, true, false, 3000, 10, &c));
+
+    /* The engine stopping ends it. */
+    st = (dash_oil_crit_t){0};
+    CHECK(!dash_oil_critical(&st, 0, true, true, 3000, 10, &c));
+    CHECK(dash_oil_critical(&st, 1000, true, true, 3000, 10, &c));
+    CHECK(!dash_oil_critical(&st, 1100, true, true, 0, 0, &c)); /* rpm 0: engine off */
+
+    /* The millisecond counter wraps. */
+    st = (dash_oil_crit_t){0};
+    CHECK(!dash_oil_critical(&st, 0xFFFFFF00u, true, true, 3000, 10, &c));
+    CHECK(!dash_oil_critical(&st, 0xFFFFFFFFu, true, true, 3000, 10, &c)); /* 255 ms */
+    CHECK(dash_oil_critical(&st, 0x000002E8u, true, true, 3000, 10,
+                            &c)); /* 0x1E8 + 0x100 = 1000 ms */
 }
 
 static void test_box_fit(void)
@@ -280,6 +358,7 @@ int main(void)
     test_unset_limits_never_warn();
     test_owner_thresholds();
     test_ethanol_level();
+    test_oil_critical();
     test_box_fit();
     test_fmt_tenths();
     test_speed_units();

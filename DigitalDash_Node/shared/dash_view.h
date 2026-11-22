@@ -66,6 +66,11 @@ typedef struct {
     uint16_t shift_flash_rpm; /* at or above this, all 16 flash */
     /* Boost: a full bar means this boost, in tenths of a PSI. */
     int32_t boost_max_psi_x10;
+    /* Full-screen low oil pressure error (see dash_thresholds.h). */
+    int32_t oil_crit_psi_x10;       /* at or below this, with the engine running */
+    int32_t oil_crit_clear_psi_x10; /* once active, stays until the pressure is above this */
+    uint16_t oil_crit_min_rpm;      /* "engine running" */
+    uint32_t oil_crit_hold_ms;      /* must hold this long before it fires */
     /* Gauge boxes (values in tenths: degF, PSI, volts, percent). */
     dash_limits_t coolant_degf_x10;
     dash_limits_t oil_temp_degf_x10;
@@ -97,10 +102,13 @@ uint16_t dash_boost_fill_px(int32_t boost_psi_x10, const dash_config_t *cfg);
 /* Lamp state. A lamp that cannot be judged is dimmed, never normal. */
 dash_lamp_t dash_lamp(bool data_valid, bool condition_active);
 
-/* Ethanol box: no data, normal, or red (ALERT) when the Ethanol Node reports that it is feeding the
- * ECU its default E85 instead of a measurement. A defaulted value must never look like a reading.
- */
-dash_level_t dash_ethanol_level(bool data_valid, bool output_is_default);
+/* Ethanol box level. The box itself carries the ethanol problem (red box, red text); the
+ * full-screen error is kept for riskier data. ALERT (red) when the Ethanol Node reports a critical
+ * fault, has gone silent or never appeared (alert), or is feeding the ECU its default E85 instead
+ * of a measurement (output_is_default, only meaningful with fresh data). NO_DATA (grey) only while
+ * nothing is wrong yet but nothing has arrived. NORMAL otherwise. A defaulted value must never look
+ * like a reading. */
+dash_level_t dash_ethanol_level(bool data_valid, bool output_is_default, bool alert);
 
 /* Gauge box level with hysteresis. `prev` is the level shown last time. */
 dash_level_t dash_box_level(bool data_valid, int32_t value, const dash_limits_t *lim,
@@ -113,6 +121,22 @@ bool dash_box_value_fits(int32_t value, int32_t max_value);
 /* Writes a tenths value as text ("14.2", "-8.5"). Returns false and writes "--" if the text is
  * longer than max_chars (it would wrap in its box) or the buffer is too small. */
 bool dash_fmt_tenths(char *buf, size_t size, int32_t v_x10, size_t max_chars);
+
+/* State of the full-screen low oil pressure error. Start zeroed. */
+typedef struct {
+    bool active;
+    bool pending;      /* the condition holds, the hold time is running */
+    uint32_t since_ms; /* when it started to hold */
+} dash_oil_crit_t;
+
+/*
+ * True while the full-screen low oil pressure error must be shown. Call with every fresh snapshot.
+ * It needs fresh analog data and a REAL engine measurement (engine_valid), so a stale or missing
+ * value never raises it, and key-on with the engine off (0 psi, rpm 0) never raises it. Wrap-safe
+ * in time.
+ */
+bool dash_oil_critical(dash_oil_crit_t *st, uint32_t now_ms, bool analog_valid, bool engine_valid,
+                       uint16_t rpm, uint32_t psi_x10, const dash_config_t *cfg);
 
 /* km/h in hundredths to mph in tenths, rounded. */
 uint32_t dash_kmh_x100_to_mph_x10(uint32_t kmh_x100);
