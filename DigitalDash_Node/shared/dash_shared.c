@@ -90,13 +90,23 @@ void dash_link_init(dash_link_t *l, uint32_t now_ms)
 dash_link_state_t dash_link_update(dash_link_t *l, bool read_ok, uint32_t heartbeat,
                                    uint32_t now_ms)
 {
-    if (read_ok && (!l->seen || heartbeat != l->last_heartbeat)) {
-        l->seen = true;
-        l->last_heartbeat = heartbeat;
-        l->last_change_ms = now_ms;
+    /* The first good read is only a sighting: the block may hold the previous run's last snapshot
+     * (SRAM4 survives a reset). The link is UP only once the heartbeat has changed, which proves
+     * the M4 is writing now. Leftover data has a frozen heartbeat, so it never counts as live and
+     * ends as LOST after the start-up grace. */
+    if (read_ok) {
+        if (!l->seen) {
+            l->seen = true;
+            l->last_heartbeat = heartbeat;
+            l->last_change_ms = now_ms;
+        } else if (heartbeat != l->last_heartbeat) {
+            l->confirmed = true;
+            l->last_heartbeat = heartbeat;
+            l->last_change_ms = now_ms;
+        }
     }
 
-    if (!l->seen) {
+    if (!l->confirmed) {
         return ((uint32_t)(now_ms - l->start_ms) > DASH_BOOT_GRACE_MS) ? DASH_LINK_LOST
                                                                        : DASH_LINK_WAITING;
     }

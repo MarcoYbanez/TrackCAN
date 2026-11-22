@@ -76,13 +76,16 @@ typedef enum {
 } dash_read_t;
 
 typedef enum {
-    DASH_LINK_WAITING = 0, /* the M4 has not been seen yet, still inside the start-up grace */
+    DASH_LINK_WAITING =
+        0, /* the M4 has not been seen to write yet, still inside the start-up grace */
     DASH_LINK_UP,
     DASH_LINK_LOST, /* never seen after the grace period, or the heartbeat stopped */
 } dash_link_state_t;
 
 typedef struct {
-    bool seen;
+    bool seen;      /* a good read has been made */
+    bool confirmed; /* the heartbeat has CHANGED since then: the M4 is writing right now, not
+                       leftover data */
     uint32_t last_heartbeat;
     uint32_t last_change_ms;
     uint32_t start_ms;

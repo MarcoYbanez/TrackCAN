@@ -62,6 +62,8 @@ static dash_config_t l_cfg; /* the warning thresholds: variables, see dash_view.
 static dash_level_t l_lvl_coolant, l_lvl_oil_temp, l_lvl_oil_press, l_lvl_fuel;
 
 static uint32_t l_last_log_s;
+static bool l_boot_frame_logged;
+static bool l_boot_data_logged;
 static volatile uint32_t l_signals; /* counts the M4's "new snapshot" signals */
 
 /*******************************************************
@@ -103,6 +105,18 @@ static void ui_build(void)
 
         for (size_t i = 0; i < sizeof(overlays) / sizeof(overlays[0]); i++) {
             lv_obj_move_to_index(overlays[i], 1);
+        }
+    }
+
+    /* The design's sample text ("100", "12.1", "-8.5") must never look like a reading: until the
+     * first live snapshot every value shows "--". */
+    {
+        lv_obj_t *const values[] = {ui_MPH_Label, ui_Coolant,   ui_Oil_Pressure,
+                                    ui_AFR,       ui_Oil_Temp,  ui_Ethanol,
+                                    ui_Battery,   ui_Gas_Level, ui_Boost_Label};
+
+        for (size_t i = 0; i < sizeof(values) / sizeof(values[0]); i++) {
+            lv_label_set_text(values[i], "--");
         }
     }
 
@@ -257,8 +271,10 @@ static void show_snapshot(const dash_snapshot_t *s)
     show_box(ui_Oil_Pressure, ui_Oil_Pressure_Overlay, analog, oil_press, 999, "%d",
              l_lvl_oil_press);
     show_box(ui_Gas_Level, ui_Fuel_Overlay, analog, fuel, 999, "%d", l_lvl_fuel);
+    /* Red box and red text when the Node is feeding the ECU its default E85 instead of a
+     * measurement. */
     show_box(ui_Ethanol, ui_Ethanol_Overlay, eth, d->ethanol_pct, 99, "E%d",
-             eth ? DASH_LEVEL_NORMAL : DASH_LEVEL_NO_DATA);
+             dash_ethanol_level(eth, d->ethanol_output_default));
 
     /* Battery, AFR and boost have no CAN source yet (TCAN-4): the M4 marks them valid only in the
      * demo drive, otherwise they show "--". */
@@ -357,6 +373,7 @@ int main(void)
     ui_build();
     display_blanking_off(display);
     dash_link_init(&link, k_uptime_get_32());
+    LOG_INF("boot: UI built, display on at %u ms after kernel start", (unsigned)k_uptime_get_32());
 
     for (;;) {
         int64_t now = k_uptime_get();
@@ -373,6 +390,11 @@ int main(void)
                 ui_set_alert(true, "REFLASH\nBOTH CORES");
             } else if (state == DASH_LINK_UP) {
                 if (r == DASH_READ_OK) { /* only a good read changes the screen */
+                    if (!l_boot_data_logged) {
+                        l_boot_data_logged = true;
+                        LOG_INF("boot: first data from the M4 shown at %u ms",
+                                (unsigned)k_uptime_get_32());
+                    }
                     show_snapshot(&snap);
                 }
                 /* A failed read keeps the last good screen until the link times out. */
@@ -384,6 +406,10 @@ int main(void)
         }
 
         lv_timer_handler();
+        if (!l_boot_frame_logged) {
+            l_boot_frame_logged = true;
+            LOG_INF("boot: first frame drawn at %u ms", (unsigned)k_uptime_get_32());
+        }
         k_msleep(UI_PERIOD_MS);
     }
     return 0;

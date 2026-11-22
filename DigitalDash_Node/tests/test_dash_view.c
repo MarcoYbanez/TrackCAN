@@ -215,6 +215,15 @@ static void test_owner_thresholds(void)
           DASH_LEVEL_NO_DATA);
 }
 
+static void test_ethanol_level(void)
+{
+    CHECK(dash_ethanol_level(true, false) == DASH_LEVEL_NORMAL);
+    CHECK(dash_ethanol_level(true, true) == DASH_LEVEL_ALERT); /* defaulted E85: red */
+    CHECK(dash_ethanol_level(false, false) == DASH_LEVEL_NO_DATA);
+    CHECK(dash_ethanol_level(false, true) ==
+          DASH_LEVEL_NO_DATA); /* stale data is no data, whatever the flag says */
+}
+
 static void test_box_fit(void)
 {
     /* The gauge boxes hold exactly 3 characters: -99 .. 999, ethanol E0 .. E99. */
@@ -270,6 +279,7 @@ int main(void)
     test_box_levels();
     test_unset_limits_never_warn();
     test_owner_thresholds();
+    test_ethanol_level();
     test_box_fit();
     test_fmt_tenths();
     test_speed_units();

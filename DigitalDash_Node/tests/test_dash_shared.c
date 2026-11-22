@@ -121,7 +121,9 @@ static void test_layout_mismatch(void)
     uint32_t hb = 0;
 
     /* Hand-computed: version 1 in the high half, the snapshot size in the low half. */
-    CHECK(DASH_LAYOUT_TAG == ((3u << 16) | (uint32_t)sizeof(dash_snapshot_t))); /* version 3: boost, battery, AFR, gear */
+    CHECK(DASH_LAYOUT_TAG ==
+          ((3u << 16) |
+           (uint32_t)sizeof(dash_snapshot_t))); /* version 3: boost, battery, AFR, gear */
 
     dash_shared_init(&sh);
     dash_shared_write(&sh, &(dash_snapshot_t){.rpm = 1234});
@@ -146,11 +148,12 @@ static void test_link_up_and_lost(void)
     CHECK(dash_link_update(&l, false, 0, 3000) == DASH_LINK_WAITING);
     CHECK(dash_link_update(&l, false, 0, 3001) == DASH_LINK_LOST);
 
-    /* The M4 appears late: the link comes up. */
-    CHECK(dash_link_update(&l, true, 1, 3010) == DASH_LINK_UP);
+    /* The M4 appears late. The first read is only a sighting; the link comes up when the heartbeat
+     * moves. */
+    CHECK(dash_link_update(&l, true, 1, 3010) == DASH_LINK_LOST); /* still past the grace period */
+    CHECK(dash_link_update(&l, true, 2, 3020) == DASH_LINK_UP);
 
     /* A moving heartbeat keeps it up. */
-    CHECK(dash_link_update(&l, true, 2, 3020) == DASH_LINK_UP);
     CHECK(dash_link_update(&l, true, 3, 3270) == DASH_LINK_UP);
 
     /* A frozen heartbeat (the M4 hung) is lost after 250 ms, even though the data reads fine. */
@@ -166,11 +169,31 @@ static void test_link_with_read_failures(void)
     dash_link_t l;
 
     dash_link_init(&l, 0);
-    CHECK(dash_link_update(&l, true, 10, 100) == DASH_LINK_UP);
+    CHECK(dash_link_update(&l, true, 10, 100) == DASH_LINK_WAITING); /* a sighting, not yet proof */
+    CHECK(dash_link_update(&l, true, 11, 120) == DASH_LINK_UP);
 
     /* Reads that keep failing (the writer is stuck mid-update) also end in a lost link. */
-    CHECK(dash_link_update(&l, false, 0, 300) == DASH_LINK_UP);
-    CHECK(dash_link_update(&l, false, 0, 351) == DASH_LINK_LOST);
+    CHECK(dash_link_update(&l, false, 0, 370) ==
+          DASH_LINK_UP); /* 250 ms since the heartbeat moved */
+    CHECK(dash_link_update(&l, false, 0, 371) == DASH_LINK_LOST); /* 251 ms */
+}
+
+static void test_leftover_data_is_never_live(void)
+{
+    dash_link_t l;
+
+    /* A reset leaves the previous run's snapshot in memory: it reads fine, but its heartbeat never
+     * moves. */
+    dash_link_init(&l, 0);
+    CHECK(dash_link_update(&l, true, 5000, 6) == DASH_LINK_WAITING);
+    CHECK(dash_link_update(&l, true, 5000, 500) == DASH_LINK_WAITING);
+    CHECK(dash_link_update(&l, true, 5000, 2000) ==
+          DASH_LINK_WAITING); /* the grace period is not over */
+    CHECK(dash_link_update(&l, true, 5000, 2001) ==
+          DASH_LINK_LOST); /* it ends as the alert, never as data */
+
+    /* If the real M4 then starts writing, the link recovers. */
+    CHECK(dash_link_update(&l, true, 1, 2020) == DASH_LINK_UP);
 }
 
 static void test_wraps(void)
@@ -182,14 +205,15 @@ static void test_wraps(void)
 
     /* The millisecond counter wraps. */
     dash_link_init(&l, 0xFFFFFF00u);
-    CHECK(dash_link_update(&l, true, 1, 0xFFFFFF10u) == DASH_LINK_UP);
-    CHECK(dash_link_update(&l, true, 2, 0x00000050u) == DASH_LINK_UP); /* 0x140 ms later */
-    CHECK(dash_link_update(&l, true, 2, 0x00000200u) ==
-          DASH_LINK_LOST); /* 0x2F0 ms with no change */
+    CHECK(dash_link_update(&l, true, 1, 0xFFFFFF10u) == DASH_LINK_WAITING);
+    CHECK(dash_link_update(&l, true, 2, 0xFFFFFF20u) == DASH_LINK_UP);
+    CHECK(dash_link_update(&l, true, 3, 0x00000050u) == DASH_LINK_UP); /* 0x130 ms later */
+    CHECK(dash_link_update(&l, true, 3, 0x00000200u) ==
+          DASH_LINK_LOST); /* 0x1B0 ms with no change */
 
     /* The heartbeat wraps from 0xFFFFFFFF to 0: still counts as a change. */
     dash_link_init(&l, 0);
-    CHECK(dash_link_update(&l, true, 0xFFFFFFFFu, 10) == DASH_LINK_UP);
+    CHECK(dash_link_update(&l, true, 0xFFFFFFFFu, 10) == DASH_LINK_WAITING);
     CHECK(dash_link_update(&l, true, 0x00000000u, 20) == DASH_LINK_UP);
     CHECK(l.last_heartbeat == 0 && l.last_change_ms == 20);
 
@@ -211,6 +235,7 @@ int main(void)
     test_layout_mismatch();
     test_link_up_and_lost();
     test_link_with_read_failures();
+    test_leftover_data_is_never_live();
     test_wraps();
 
     printf("%d checks, %d failures\n", l_checks, l_failures);

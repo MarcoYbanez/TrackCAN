@@ -97,6 +97,11 @@ uint16_t dash_boost_fill_px(int32_t boost_psi_x10, const dash_config_t *cfg);
 /* Lamp state. A lamp that cannot be judged is dimmed, never normal. */
 dash_lamp_t dash_lamp(bool data_valid, bool condition_active);
 
+/* Ethanol box: no data, normal, or red (ALERT) when the Ethanol Node reports that it is feeding the
+ * ECU its default E85 instead of a measurement. A defaulted value must never look like a reading.
+ */
+dash_level_t dash_ethanol_level(bool data_valid, bool output_is_default);
+
 /* Gauge box level with hysteresis. `prev` is the level shown last time. */
 dash_level_t dash_box_level(bool data_valid, int32_t value, const dash_limits_t *lim,
                             dash_level_t prev);

@@ -116,6 +116,14 @@ dash_lamp_t dash_lamp(bool data_valid, bool condition_active)
     return condition_active ? DASH_LAMP_ACTIVE : DASH_LAMP_NORMAL;
 }
 
+dash_level_t dash_ethanol_level(bool data_valid, bool output_is_default)
+{
+    if (!data_valid) {
+        return DASH_LEVEL_NO_DATA;
+    }
+    return output_is_default ? DASH_LEVEL_ALERT : DASH_LEVEL_NORMAL;
+}
+
 dash_level_t dash_box_level(bool data_valid, int32_t value, const dash_limits_t *lim,
                             dash_level_t prev)
 {
