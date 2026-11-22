@@ -16,6 +16,7 @@ add_library(dash_shared STATIC
     ${DASH_SHARED_DIR}/dash_view.c
     ${DASH_SHARED_DIR}/dash_sim.c
     ${DASH_SHARED_DIR}/dash_health.c
+    ${DASH_SHARED_DIR}/dash_loopback_source.c
     ${DASH_SHARED_DIR}/dash_geometry.c
     ${DASH_SHARED_DIR}/dash_render.c
     ${TRACKCAN_PATH}/can/dash.c
@@ -59,3 +60,8 @@ add_executable(test_dash_health test_dash_health.c)
 target_link_libraries(test_dash_health PRIVATE dash_shared)
 target_compile_options(test_dash_health PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
 add_test(NAME dash_health COMMAND test_dash_health)
+
+add_executable(test_dash_loopback test_dash_loopback.c)
+target_link_libraries(test_dash_loopback PRIVATE dash_shared)
+target_compile_options(test_dash_loopback PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
+add_test(NAME dash_loopback COMMAND test_dash_loopback)
