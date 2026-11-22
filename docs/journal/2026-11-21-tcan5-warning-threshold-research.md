@@ -131,3 +131,9 @@ separate SEVERE level above the 15 psi box: **at or below 2.1 psi** (the car's o
 blip do not trigger it), clearing above 3.1 psi (mine). Variables in `dash_thresholds.h`. Tested on the host (197 checks, 9 deliberate
 bugs caught) and on the board: during the demo's injected pressure sag it came on for exactly the sag and at no other time in 115 s.
 Limit: with no RPM measurement (a live image before TCAN-7) "engine running" is unknown, so it cannot fire; the red box still works.
+
+**Update the same day: the full-screen threshold is 10 psi.** The owner asked for "like 10 psi" instead of the 2.1 psi switch point. It
+is now `DASH_OIL_CRIT_PSI_X10 = 100`, clearing above 11.0 psi, still held 1 s with the engine really running. 10 psi is under the
+factory minimum (14 psi at 800 rpm, `ME(STi)-26`) and above the car's own switch (2.1 psi, `IDI-5`); the number is the owner's choice,
+not a sourced limit. Risk to watch on the car: a cold engine must be above 10 psi within 1 s of passing 500 rpm, or the error fires at every
+start. Host test over 20 minutes of the demo drive: it fires only for the injected sag (healthy pressure never below 17.6 psi while running).

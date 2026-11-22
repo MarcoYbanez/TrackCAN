@@ -239,9 +239,9 @@ static void test_oil_critical(void)
     dash_oil_crit_t st = {0};
     uint32_t t = 100000;
 
-    dash_config_defaults(&c); /* 2.1 psi, clears above 3.1 psi, 500 rpm, held 1000 ms */
-    CHECK(c.oil_crit_psi_x10 == 21 && c.oil_crit_clear_psi_x10 == 31 && c.oil_crit_min_rpm == 500 &&
-          c.oil_crit_hold_ms == 1000);
+    dash_config_defaults(&c); /* 10.0 psi, clears above 11.0 psi, 500 rpm, held 1000 ms */
+    CHECK(c.oil_crit_psi_x10 == 100 && c.oil_crit_clear_psi_x10 == 110 &&
+          c.oil_crit_min_rpm == 500 && c.oil_crit_hold_ms == 1000);
 
     /* Key on, engine off: pressure 0 and rpm 0 is normal and must never raise it. */
     for (int i = 0; i < 50; i++, t += 100) {
@@ -265,18 +265,21 @@ static void test_oil_critical(void)
     CHECK(dash_oil_critical(&st, t + 1000, true, true, 850, 10, &c)); /* 1000 ms: fires */
     CHECK(dash_oil_critical(&st, t + 5000, true, true, 850, 10, &c));
 
-    /* Hysteresis: stays active up to 3.1 psi, clears above it. */
-    CHECK(dash_oil_critical(&st, t + 5100, true, true, 850, 31, &c));  /* 3.1 psi: still active */
-    CHECK(!dash_oil_critical(&st, t + 5200, true, true, 850, 32, &c)); /* 3.2 psi: clear */
-    CHECK(!dash_oil_critical(&st, t + 5300, true, true, 850, 25,
-                             &c)); /* 2.5 psi is above the 2.1 start level */
+    /* Hysteresis: stays active up to 11.0 psi, clears above it. */
+    CHECK(dash_oil_critical(&st, t + 5100, true, true, 850, 110, &c));  /* 11.0 psi: still active */
+    CHECK(!dash_oil_critical(&st, t + 5200, true, true, 850, 111, &c)); /* 11.1 psi: clear */
+    CHECK(!dash_oil_critical(&st, t + 5300, true, true, 850, 105,
+                             &c)); /* 10.5 psi is above the 10.0 start level */
 
-    /* The threshold itself is inclusive: 2.1 psi counts, 2.2 psi does not. */
+    /* The threshold itself is inclusive: 10.0 psi counts, 10.1 psi does not. A healthy hot idle (14
+     * psi, the factory minimum) and the red-box level (15 psi) never reach it. */
     st = (dash_oil_crit_t){0};
-    CHECK(!dash_oil_critical(&st, 0, true, true, 3000, 22, &c));
-    CHECK(!dash_oil_critical(&st, 5000, true, true, 3000, 22, &c));
-    CHECK(!dash_oil_critical(&st, 6000, true, true, 3000, 21, &c));
-    CHECK(dash_oil_critical(&st, 7000, true, true, 3000, 21, &c));
+    CHECK(!dash_oil_critical(&st, 0, true, true, 3000, 101, &c));
+    CHECK(!dash_oil_critical(&st, 5000, true, true, 3000, 101, &c));
+    CHECK(!dash_oil_critical(&st, 5100, true, true, 800, 140, &c));
+    CHECK(!dash_oil_critical(&st, 9000, true, true, 800, 149, &c));
+    CHECK(!dash_oil_critical(&st, 20000, true, true, 3000, 100, &c));
+    CHECK(dash_oil_critical(&st, 21000, true, true, 3000, 100, &c));
 
     /* Stale or missing data never raises it, and an active error ends when the data goes. */
     CHECK(!dash_oil_critical(&st, 7100, false, true, 3000, 10, &c)); /* analog stale */

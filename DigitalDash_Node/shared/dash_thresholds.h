@@ -31,16 +31,19 @@
 /* FULL-SCREEN "LOW OIL PRESSURE" error: the one riskier-data case the owner has named so far
  * (2026-11-22). It is the SEVERE level, separate from the red oil pressure box above (15 psi). It
  * fires when the engine is really running (RPM from a real measurement at or above
- * DASH_OIL_CRIT_MIN_RPM) and the pressure is at or below the car's own oil pressure warning switch
- * point, 2.1 psi (service manual IDI-5,
+ * DASH_OIL_CRIT_MIN_RPM) and the pressure is at or below 10 psi (the owner's choice, 2026-11-22;
+ * it is under the factory minimum of 14 psi at 800 rpm, service manual ME(STi)-26, and above the
+ * car's own oil pressure warning switch point of 2.1 psi, IDI-5, see
  * docs/journal/2026-11-21-tcan5-warning-threshold-research.md), and has stayed there for
  * DASH_OIL_CRIT_HOLD_MS, so the pressure building up after a start and a one-sample blip do not
  * trigger it. It clears once the pressure is back above DASH_OIL_CRIT_CLEAR_PSI_X10. The RPM
  * minimum, the hold time and the clear level are my choices, not sourced. With no RPM measurement
- * (a live image before TCAN-7) it cannot fire, because "engine running" is unknown. */
-#define DASH_OIL_CRIT_PSI_X10 21
-#define DASH_OIL_CRIT_CLEAR_PSI_X10 31 /* clears above 3.1 psi */
-#define DASH_OIL_CRIT_MIN_RPM 500      /* above cranking (about 250), below idle (about 850) */
+ * (a live image before TCAN-7) it cannot fire, because "engine running" is unknown. WATCH ON THE
+ * CAR: a cold engine must get above 10 psi within DASH_OIL_CRIT_HOLD_MS of the RPM passing the
+ * minimum, or this fires at every start. */
+#define DASH_OIL_CRIT_PSI_X10 100
+#define DASH_OIL_CRIT_CLEAR_PSI_X10 110 /* clears above 11.0 psi */
+#define DASH_OIL_CRIT_MIN_RPM 500       /* above cranking (about 250), below idle (about 850) */
 #define DASH_OIL_CRIT_HOLD_MS 1000
 
 /* Battery and fuel are not judged here: the car's own charge lamp and low-fuel lamp reach the dash

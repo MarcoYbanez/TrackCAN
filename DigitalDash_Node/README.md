@@ -120,10 +120,12 @@ The full screen is used for:
 
 - the dash's own failures: the M4 link lost (NO DATA CAN CORE LOST), mismatched core images (REFLASH BOTH CORES), a watchdog that
   could not start;
-- **LOW OIL PRESSURE** (the owner's choice): oil pressure at or below the car's own oil pressure warning switch point (2.1 psi,
-  service manual IDI-5) while the engine is really running (a real RPM measurement of 500 or more), held for 1 s, clearing above
-  3.1 psi. It needs fresh analog data and a real RPM measurement, so key-on with the engine off never raises it, and with no RPM
-  source (a live image before TCAN-7) it cannot fire at all. The RPM minimum, the hold time and the clear level are my choices;
-  all four values are variables in `shared/dash_thresholds.h`. The red oil pressure box (15 psi) is a separate, milder level.
+- **LOW OIL PRESSURE** (the owner's choice): oil pressure at or below **10 psi** while the engine is really running (a real RPM
+  measurement of 500 or more), held for 1 s, clearing above 11 psi. That is under the factory minimum of 14 psi at idle and above
+  the car's own oil pressure warning switch (2.1 psi). It needs fresh analog data and a real RPM measurement, so key-on with the
+  engine off never raises it, and with no RPM source (a live image before TCAN-7) it cannot fire at all. The RPM minimum, the hold
+  time and the clear level are my choices; all four values are variables in `shared/dash_thresholds.h`. The red oil pressure box
+  (15 psi) is a separate, milder level. On the car, watch that a cold engine gets above 10 psi within 1 s of passing 500 rpm, or it
+  fires at every start.
 
 Which other data, if any, deserves the full screen is still the owner's decision.
