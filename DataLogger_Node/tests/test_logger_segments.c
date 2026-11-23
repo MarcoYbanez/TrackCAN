@@ -10,7 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "logger_core.h"
 #include "logger_segments.h"
+#include "trackcan.h"
 
 /*******************************************************
  * Macros
@@ -161,6 +163,81 @@ static void test_decimation(void)
 	CHECK(!seg_decim_keep(&l_decim, true, 0x100, 500, 1000));
 }
 
+static void test_daily_intervals(void)
+{
+	/* The owner's table (docs/logging-rates.md), daily column: 10 Hz for RPM and oil pressure, 1 Hz for the rest. The identifiers are written out
+	 * here as literals, independent of the generated macros the code uses, and then checked against those macros. */
+	CHECK(seg_daily_interval_ms(0x100) == 100u); /* Dash_Engine: RPM and speed */
+	CHECK(seg_daily_interval_ms(0x203) == 100u); /* DataLogger_OilPressure */
+	CHECK(seg_daily_interval_ms(0x200) == 1000u); /* DataLogger_Analog: oil temperature, coolant temperature, fuel level */
+	CHECK(seg_daily_interval_ms(0x300) == 1000u); /* Ethanol_Data */
+	CHECK(seg_daily_interval_ms(0x201) == 1000u); /* lights */
+	CHECK(seg_daily_interval_ms(0x202) == 1000u); /* DataLogger_Status */
+	CHECK(seg_daily_interval_ms(0x400) == 1000u); /* Logger_Control */
+	CHECK(seg_daily_interval_ms(0x701) == 1000u && seg_daily_interval_ms(0x702) == 1000u && seg_daily_interval_ms(0x703) == 1000u);
+	CHECK(seg_daily_interval_ms(0x000) == 1000u && seg_daily_interval_ms(0x7FF) == 1000u); /* unknown identifiers are slow */
+	CHECK(seg_daily_interval_ms(0x101) == 1000u && seg_daily_interval_ms(0x204) == 1000u); /* neighbours of the fast ones are not fast */
+	CHECK(SEG_DAILY_FAST_MS == 100u && SEG_DAILY_SLOW_MS == 1000u);
+
+	/* The literals above must still be the contract's identifiers. */
+	CHECK(TRACKCAN_DASH_ENGINE_FRAME_ID == 0x100u);
+	CHECK(TRACKCAN_DATA_LOGGER_OIL_PRESSURE_FRAME_ID == 0x203u);
+	CHECK(TRACKCAN_DATA_LOGGER_ANALOG_FRAME_ID == 0x200u);
+	CHECK(TRACKCAN_ETHANOL_DATA_FRAME_ID == 0x300u);
+
+	/* Through the reduction: a 50 Hz oil pressure stream keeps 10 frames a second, a 10 Hz temperature stream keeps 1. */
+	seg_decim_init(&l_decim);
+	unsigned fast = 0, slow = 0;
+	for (uint32_t t = 0; t < 10000; t += 20)
+	{
+		fast += seg_decim_keep(&l_decim, true, 0x203, t, seg_daily_interval_ms(0x203)) ? 1u : 0u;
+	}
+	for (uint32_t t = 0; t < 10000; t += 100)
+	{
+		slow += seg_decim_keep(&l_decim, true, 0x200, t, seg_daily_interval_ms(0x200)) ? 1u : 0u;
+	}
+	CHECK(fast == 100u); /* 10 s at 10 per second */
+	CHECK(slow == 10u);	 /* 10 s at 1 per second */
+}
+
+static void test_notes_fit_the_line_buffer(void)
+{
+	/* Every NOTE the firmware writes at the start of a file must fit the logger's line buffer, at the widest timestamp (10 digits). A note that does not
+	 * fit makes logger_format_note return 0 and the header fail: that is how a 79 character daily note once stopped the daily files from being created. */
+	char line[LOGGER_LINE_MAX];
+	static const char *const k_notes[] = {
+		SEG_NOTE_DAILY,
+		SEG_NOTE_MANUAL,
+		"continues=D0000007.CSV",   /* a rollover */
+		"continues=M9999999.CSV",
+		"mode=loopback bench data", /* the bench builds */
+		"dropped=4294967295",
+		"start",
+	};
+
+	for (unsigned i = 0; i < sizeof(k_notes) / sizeof(k_notes[0]); i++)
+	{
+		size_t n = logger_format_note(line, sizeof(line), 4294967295u, k_notes[i]);
+
+		CHECK(n > 0u);
+		CHECK(n + 1u <= sizeof(line)); /* the newline and the NUL are inside the buffer */
+		CHECK(strlen(k_notes[i]) <= 60u); /* headroom: a note is kept well inside the 80 character line */
+	}
+
+	/* The two family notes name their family, which the checker and the analysis tools rely on. */
+	CHECK(strncmp(SEG_NOTE_DAILY, "mode=daily", 10) == 0);
+	CHECK(strncmp(SEG_NOTE_MANUAL, "mode=highres", 12) == 0);
+
+	/* The failure this guards against: a note that is too long is refused. */
+	{
+		char too_long[80];
+
+		memset(too_long, 'x', sizeof(too_long) - 1u);
+		too_long[sizeof(too_long) - 1u] = '\0';
+		CHECK(logger_format_note(line, sizeof(line), 4294967295u, too_long) == 0u);
+	}
+}
+
 static void test_button(void)
 {
 	seg_button_t b;
@@ -293,6 +370,8 @@ int main(void)
 	test_names();
 	test_ring();
 	test_decimation();
+	test_daily_intervals();
+	test_notes_fit_the_line_buffer();
 	test_button();
 	test_mode();
 

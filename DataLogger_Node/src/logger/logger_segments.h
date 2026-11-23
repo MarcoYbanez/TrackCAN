@@ -3,6 +3,9 @@
  * @brief The rules for two logging modes (TCAN-20), as pure logic with no Zephyr and no file system: the file names, the ring with a space
  *        quota per mode, the daily low-rate reduction, the button (edge, debounce, staleness) and the mode switch with its automatic stop.
  *
+ * The daily rates follow docs/logging-rates.md (the owner's table): 10 Hz for the fast channels that exist today (engine RPM and oil pressure), 1 Hz for
+ * everything else (coolant and oil temperature, fuel level, ethanol, lamps, status, heartbeats). High-res keeps every frame, so its rates are the senders' cycle times.
+ *
  * Two families of files, each with its own number sequence and its own space budget:
  *     Dnnnnnnn.CSV   daily: about one frame per CAN ID per second, always on
  *     Mnnnnnnn.CSV   manual (high resolution): every frame, between a button press and the next press (or the automatic stop)
@@ -24,6 +27,13 @@
 #define SEG_FILE_NUMBER_MAX 9999999u /* D0000001.CSV .. D9999999.CSV */
 #define SEG_FILE_NAME_LEN 13u		 /* "D0000007.CSV" plus the NUL */
 #define SEG_ID_COUNT 2048u			 /* 11-bit identifiers */
+#define SEG_DAILY_FAST_MS 100u	 /* 10 Hz */
+
+/* The NOTE written at the start of every file of a family. A note longer than the logger's line buffer is rejected (logger_format_note returns 0), which
+ * makes the header fail: keep them short, the detail is in docs/logging-rates.md. The host test formats each one at the widest timestamp. */
+#define SEG_NOTE_DAILY "mode=daily per message rates (docs/logging-rates.md)"
+#define SEG_NOTE_MANUAL "mode=highres every frame"
+#define SEG_DAILY_SLOW_MS 1000u	 /* 1 Hz */
 
 /*******************************************************
  * Type Definitions
@@ -93,6 +103,9 @@ void seg_ring_fold(seg_ring_t *r, unsigned number, uint32_t bytes); /* one file 
 /* True when the family holds more than quota_bytes AND has more than one file: the newest file is the open one and is never a candidate. */
 bool seg_ring_over(const seg_ring_t *r, uint64_t quota_bytes);
 unsigned seg_ring_next_number(const seg_ring_t *r); /* highest + 1, or 0 when SEG_FILE_NUMBER_MAX is already used (stop rather than overwrite) */
+
+/* The daily-mode interval for a CAN identifier: SEG_DAILY_FAST_MS for the fast channels (engine RPM, oil pressure), SEG_DAILY_SLOW_MS for every other identifier. */
+uint32_t seg_daily_interval_ms(uint32_t id);
 
 void seg_decim_init(seg_decim_t *d);
 /* True when this frame is kept in the daily log: the first one of an (direction, identifier), then one per interval_ms. Wrap-safe. */
