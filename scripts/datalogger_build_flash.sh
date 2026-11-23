@@ -28,9 +28,13 @@ case "$VARIANT" in
           EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_CUTTEST=ON) ;;
     flood) BUILD="$ROOT/build/datalogger_flood"
           EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON) ;;
+    rotate) BUILD="$ROOT/build/datalogger_rotate"      # bench: flood + a new file every 20 s (age rule only)
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=20 -DDATALOGGER_SD_ROTATE_KB=0) ;;
+    rotatesize) BUILD="$ROOT/build/datalogger_rotatesize"  # bench: flood + a new file every 2000 KB (size rule only)
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=0 -DDATALOGGER_SD_ROTATE_KB=2000) ;;
     scaffold) BUILD="$ROOT/build/datalogger_scaffold"
           EXTRA=(-DDATALOGGER_SD=OFF -DDATALOGGER_CAN=OFF -DCONFIG_CAN=n -DCONFIG_DISK_ACCESS=n -DCONFIG_FILE_SYSTEM=n -DCONFIG_FAT_FILESYSTEM_ELM=n) ;;
-    *) echo "variant must be full, nosd, scaffold, loopback or flood"; exit 2 ;;
+    *) echo "variant must be full, nosd, scaffold, loopback, flood, rotate or rotatesize"; exit 2 ;;
 esac
 
 build() {
@@ -48,5 +52,5 @@ case "${1:-}" in
     build) build ;;
     flash) flash ;;
     all) build; flash ;;
-    *) echo "usage: $0 build|flash|all [full|nosd|scaffold|loopback|flood]"; exit 2 ;;
+    *) echo "usage: $0 build|flash|all [full|nosd|scaffold|loopback|flood|rotate|rotatesize]"; exit 2 ;;
 esac

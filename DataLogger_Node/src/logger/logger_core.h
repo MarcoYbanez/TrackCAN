@@ -50,6 +50,16 @@ typedef struct
 	bool unsynced; /* data has been written since the last sync */
 } logger_policy_t;
 
+/* When to start a new log file: after max_bytes written to this file or max_age_ms since it was opened, whichever comes first. A limit
+ * of 0 is "no limit". The check is made after a write, so a file can exceed max_bytes by up to one write. */
+typedef struct
+{
+	uint32_t max_bytes;
+	uint32_t max_age_ms;
+	uint32_t opened_ms;
+	uint32_t bytes; /* written to this file so far (saturates, never wraps) */
+} logger_rotation_t;
+
 /*******************************************************
  * Public Function Prototypes
  *******************************************************/
@@ -92,5 +102,10 @@ bool logger_policy_should_write(const logger_policy_t *p, uint32_t now_ms);
 void logger_policy_written(logger_policy_t *p); /* the buffer went to the file */
 bool logger_policy_should_sync(const logger_policy_t *p, uint32_t now_ms);
 void logger_policy_synced(logger_policy_t *p, uint32_t now_ms);
+
+/* A new file was opened at now_ms: the counters start from zero. */
+void logger_rotation_start(logger_rotation_t *r, uint32_t max_bytes, uint32_t max_age_ms, uint32_t now_ms);
+void logger_rotation_wrote(logger_rotation_t *r, uint32_t bytes); /* bytes went into the file */
+bool logger_rotation_due(const logger_rotation_t *r, uint32_t now_ms);
 
 #endif /* LOGGER_CORE_H */

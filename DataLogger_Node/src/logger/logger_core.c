@@ -210,3 +210,25 @@ void logger_policy_synced(logger_policy_t *p, uint32_t now_ms)
 	p->unsynced = false;
 	p->last_sync_ms = now_ms;
 }
+
+void logger_rotation_start(logger_rotation_t *r, uint32_t max_bytes, uint32_t max_age_ms, uint32_t now_ms)
+{
+	r->max_bytes = max_bytes;
+	r->max_age_ms = max_age_ms;
+	r->opened_ms = now_ms;
+	r->bytes = 0;
+}
+
+void logger_rotation_wrote(logger_rotation_t *r, uint32_t bytes)
+{
+	r->bytes = (bytes > UINT32_MAX - r->bytes) ? UINT32_MAX : r->bytes + bytes;
+}
+
+bool logger_rotation_due(const logger_rotation_t *r, uint32_t now_ms)
+{
+	if (r->max_bytes != 0u && r->bytes >= r->max_bytes)
+	{
+		return true;
+	}
+	return r->max_age_ms != 0u && (uint32_t)(now_ms - r->opened_ms) >= r->max_age_ms;
+}
