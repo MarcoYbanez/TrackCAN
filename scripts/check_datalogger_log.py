@@ -15,6 +15,7 @@ HEADER = "t_ms,dir,id,dlc,data"
 FRAME = re.compile(r"^(\d+),(TX|RX),([0-9A-F]{3}),([0-8]),([0-9A-F]*)$")
 NOTE = re.compile(r"^(\d+),NOTE,,,(.*)$")
 HEARTBEAT_ID = 0x702
+JITTER_MS = 2  # two threads stamp a frame before queuing it: a step back of 1-2 ms is possible (bench flood only)
 FLOOD_ID, FLOOD_MARK_ID = 0x7F0, 0x7FF  # bench flood generator: sequence number and rate-step marker
 
 
@@ -34,9 +35,9 @@ def check(lines, loopback):
             if len(data) != 2 * dlc:
                 problems.append(f"line {n}: dlc {dlc} but {len(data) // 2} data bytes: {line!r}")
                 continue
-            if last_t is not None and t < last_t:
+            if last_t is not None and t + JITTER_MS < last_t:
                 problems.append(f"line {n}: time went backwards ({last_t} -> {t})")
-            last_t = t
+            last_t = t if last_t is None else max(last_t, t)
             (tx if direction == "TX" else rx)[fid] += 1
             if direction == "TX" and fid == FLOOD_ID and dlc == 4:
                 seqs.append((t, int(data, 16)))
@@ -53,10 +54,15 @@ def check(lines, loopback):
 
     # The last line of a log cut by a power loss may be partial: report it, but it is the only one allowed to be.
     gaps = [(a, b) for (_, a), (_, b) in zip(heartbeat, heartbeat[1:]) if (b - a) % 256 != 1]
-    if gaps:
-        problems.append(f"heartbeat counter skipped {len(gaps)} time(s), e.g. {gaps[0][0]} -> {gaps[0][1]}")
+    dropped_noted = any(text.startswith("dropped=") for _, text in notes)
+    if gaps and not dropped_noted:
+        problems.append(f"heartbeat counter skipped {len(gaps)} time(s), e.g. {gaps[0][0]} -> {gaps[0][1]}, and the log never said frames were dropped (silent loss)")
+    elif gaps:
+        print(f"  heartbeat gaps: {len(gaps)}, explained by a dropped= note")
     if loopback:
         for fid in sorted(set(tx) | set(rx)):
+            if fid in (FLOOD_ID, FLOOD_MARK_ID):
+                continue  # the bench flood is TX only by design
             if abs(tx[fid] - rx[fid]) > 2:
                 problems.append(f"loopback ID {fid:03X}: {tx[fid]} TX but {rx[fid]} RX")
         if not any("loopback" in text for _, text in notes):
