@@ -40,6 +40,7 @@ LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
 #define TICK_MS 50
 #define RETRY_MS 2000
 #define STATUS_LOG_MS 10000
+#define IDLE_PROBE_MS 2000 /* with nothing to write, read one sector this often so a card pulled from an idle logger is noticed */
 /* A new file every 10 minutes or 30 MB, whichever comes first (TCAN-19). 0 = no limit. The bench builds shorten them. */
 #ifndef DATALOGGER_SD_ROTATE_SECONDS
 #define DATALOGGER_SD_ROTATE_SECONDS 600
@@ -89,6 +90,8 @@ static atomic_t l_state = ATOMIC_INIT(SD_LOGGER_STARTING);
 static uint32_t l_lines;
 static uint32_t l_bytes;
 static uint32_t l_last_sync_ms;
+static uint32_t l_last_card_ms; /* the last time the card was written, synced or probed */
+static uint8_t l_probe_buf[512] __aligned(4);
 static unsigned l_number;        /* the number of the file now open */
 static logger_rotation_t l_rot;
 static uint32_t l_rolls;
@@ -243,6 +246,7 @@ static int flush_buffer(void)
 		return w < 0 ? (int)w : -EIO;
 	}
 	l_bytes += (uint32_t)l_len;
+	l_last_card_ms = k_uptime_get_32();
 	logger_rotation_wrote(&l_rot, (uint32_t)l_len);
 	l_len = 0;
 	logger_policy_written(&l_policy);
@@ -394,6 +398,7 @@ static int start_file(unsigned number, const char *continues)
 	}
 	logger_policy_synced(&l_policy, k_uptime_get_32());
 	l_last_sync_ms = k_uptime_get_32();
+	l_last_card_ms = l_last_sync_ms;
 	LOG_INF("logging to %s", path);
 	set_state(SD_LOGGER_LOGGING);
 	return 0;
@@ -616,6 +621,20 @@ static int run_logging(void)
 			{
 				logger_policy_synced(&l_policy, now);
 				l_last_sync_ms = now;
+				l_last_card_ms = now;
+			}
+		}
+		if (ret == 0 && logger_idle_probe_due(l_last_card_ms, now, IDLE_PROBE_MS))
+		{
+			/* Nothing has touched the card for a while: a read of sector 0 shows whether it is still there. */
+			ret = disk_access_read(DISK_NAME, l_probe_buf, 0, 1);
+			if (ret != 0)
+			{
+				LOG_ERR("the card did not answer an idle read (%d)", ret);
+			}
+			else
+			{
+				l_last_card_ms = k_uptime_get_32();
 			}
 		}
 		if (ret == 0 && logger_rotation_due(&l_rot, now))

@@ -77,11 +77,19 @@ class Port:
         return line.decode(errors="replace").strip()
 
     def read_exact(self, n, timeout=None):
+        """Exactly n bytes. Reads straight into one growing buffer and never past n (the CRC line follows): copying the whole buffer on every
+        chunk made a 30 MB file take quadratic time, the Mac fell behind and the Node gave up on it."""
         timeout = TIMEOUT_S if timeout is None else timeout
-        while len(self.buf) < n:
-            self._fill(timeout)
-        data, self.buf = self.buf[:n], self.buf[n:]
-        return data
+        out = bytearray(self.buf[:n])
+        self.buf = self.buf[n:]
+        while len(out) < n:
+            if not select.select([self.fd], [], [], timeout)[0]:
+                raise TransferError("timed out waiting for the DataLogger")
+            data = os.read(self.fd, min(262144, n - len(out)))
+            if not data:
+                raise TransferError("the DataLogger closed the port")
+            out += data
+        return bytes(out)
 
 
 def list_files(port):

@@ -108,4 +108,8 @@ void logger_rotation_start(logger_rotation_t *r, uint32_t max_bytes, uint32_t ma
 void logger_rotation_wrote(logger_rotation_t *r, uint32_t bytes); /* bytes went into the file */
 bool logger_rotation_due(const logger_rotation_t *r, uint32_t now_ms);
 
+/* True when the card has not been touched for interval_ms (a write, a sync or an earlier probe): time for a cheap read to check it is still
+ * there, so a card pulled from an idle logger is noticed. interval_ms 0 = never. Wrap-safe. */
+bool logger_idle_probe_due(uint32_t last_access_ms, uint32_t now_ms, uint32_t interval_ms);
+
 #endif /* LOGGER_CORE_H */
