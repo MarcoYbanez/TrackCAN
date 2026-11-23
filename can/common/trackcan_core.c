@@ -48,6 +48,10 @@ static const tcan_msg_info_t l_msgs[TCAN_MSG_COUNT] = {
                                     TCAN_NODE_DATALOGGER},
     [TCAN_MSG_LOGGER_CONTROL] = {TRACKCAN_LOGGER_CONTROL_FRAME_ID, TRACKCAN_LOGGER_CONTROL_LENGTH,
                                  TRACKCAN_LOGGER_CONTROL_CYCLE_TIME_MS, TCAN_NODE_CONTROLLER},
+    [TCAN_MSG_DATALOGGER_OILPRESSURE] = {TRACKCAN_DATA_LOGGER_OIL_PRESSURE_FRAME_ID,
+                                         TRACKCAN_DATA_LOGGER_OIL_PRESSURE_LENGTH,
+                                         TRACKCAN_DATA_LOGGER_OIL_PRESSURE_CYCLE_TIME_MS,
+                                         TCAN_NODE_DATALOGGER},
 };
 
 /*******************************************************

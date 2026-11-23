@@ -168,7 +168,6 @@ static void publish(void)
 
     if (tcan_tx_due(&l_can, TCAN_MSG_DATALOGGER_ANALOG)) {
         struct trackcan_data_logger_analog_t m = {
-            .oil_pressure = s.oil_pressure_bar_x100,
             .oil_temp = s.oil_temp_degc_x10,
             .coolant_temp = s.coolant_temp_degc_x10,
             .fuel_level = s.fuel_level_pct_x10,
@@ -176,6 +175,15 @@ static void publish(void)
 
         if (trackcan_data_logger_analog_pack(buf, &m, sizeof(buf)) > 0) {
             (void)tcan_tx(&l_can, TCAN_MSG_DATALOGGER_ANALOG, buf);
+        }
+    }
+
+    /* Oil pressure has its own fast message (50 Hz), so the slow signals above do not ride at that rate (docs/logging-rates.md). */
+    if (tcan_tx_due(&l_can, TCAN_MSG_DATALOGGER_OILPRESSURE)) {
+        struct trackcan_data_logger_oil_pressure_t m = {.oil_pressure = s.oil_pressure_bar_x100};
+
+        if (trackcan_data_logger_oil_pressure_pack(buf, &m, sizeof(buf)) > 0) {
+            (void)tcan_tx(&l_can, TCAN_MSG_DATALOGGER_OILPRESSURE, buf);
         }
     }
 

@@ -276,7 +276,8 @@ static void show_lamp(lv_obj_t *lamp, dash_lamp_t st)
 static void show_snapshot(const dash_snapshot_t *s)
 {
     const struct dash_display *d = &s->display;
-    bool analog = d->analog_state == TCAN_RX_FRESH;
+    bool analog = d->analog_state == TCAN_RX_FRESH;                  /* oil temperature, coolant, fuel */
+    bool oil_fresh = d->oil_pressure_state == TCAN_RX_FRESH;         /* oil pressure: its own message */
     bool lights = d->lights_state == TCAN_RX_FRESH;
     bool eth = d->ethanol_state == TCAN_RX_FRESH;
     int32_t oil_press = (int32_t)(d->oil_pressure_psi_x10 / 10u);
@@ -319,7 +320,7 @@ static void show_snapshot(const dash_snapshot_t *s)
 
     l_lvl_coolant = dash_box_level(analog, coolant, &l_cfg.coolant_degf_x10, l_lvl_coolant);
     l_lvl_oil_temp = dash_box_level(analog, oil_temp, &l_cfg.oil_temp_degf_x10, l_lvl_oil_temp);
-    l_lvl_oil_press = dash_box_level(analog, (int32_t)d->oil_pressure_psi_x10,
+    l_lvl_oil_press = dash_box_level(oil_fresh, (int32_t)d->oil_pressure_psi_x10,
                                      &l_cfg.oil_pressure_psi_x10, l_lvl_oil_press);
     l_lvl_fuel =
         dash_box_level(analog, (int32_t)d->fuel_level_pct_x10, &l_cfg.fuel_pct_x10, l_lvl_fuel);
@@ -331,7 +332,7 @@ static void show_snapshot(const dash_snapshot_t *s)
     }
     show_box(ui_Coolant, ui_Coolant_Overlay, analog, coolant, 999, "%d", l_lvl_coolant);
     show_box(ui_Oil_Temp, ui_Oil_Temp_Overlay, analog, oil_temp, 999, "%d", l_lvl_oil_temp);
-    show_box(ui_Oil_Pressure, ui_Oil_Pressure_Overlay, analog, oil_press, 999, "%d",
+    show_box(ui_Oil_Pressure, ui_Oil_Pressure_Overlay, oil_fresh, oil_press, 999, "%d",
              l_lvl_oil_press);
     show_box(ui_Gas_Level, ui_Fuel_Overlay, analog, fuel, 999, "%d", l_lvl_fuel);
     /* The ethanol box carries the ethanol problem: red box and red text when the Node reports a
@@ -435,10 +436,11 @@ static void show_snapshot(const dash_snapshot_t *s)
 
     /* A good snapshot means the link is up and the layouts match, so a full-screen error from
      * before is over. The one full-screen error that belongs to the data itself is low oil pressure
-     * with the engine really running (the owner's choice; see dash_thresholds.h). It needs fresh
-     * analog data and a real RPM measurement, so with no RPM source (a live image before TCAN-7) it
-     * cannot fire. */
-    ui_set_alert(dash_oil_critical(&l_oil_crit, k_uptime_get_32(), analog, engine, s->rpm,
+     * with the engine really running (the owner's choice; see dash_thresholds.h). It needs a fresh
+     * oil pressure message (its own message since TCAN-28: a stalled temperature or fuel message
+     * does not switch it off) and a real RPM measurement, so with no RPM source (a live image
+     * before TCAN-7) it cannot fire. */
+    ui_set_alert(dash_oil_critical(&l_oil_crit, k_uptime_get_32(), oil_fresh, engine, s->rpm,
                                    d->oil_pressure_psi_x10, &l_cfg),
                  "LOW OIL\nPRESSURE");
 }

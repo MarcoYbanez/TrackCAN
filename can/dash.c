@@ -83,12 +83,20 @@ void dash_can_get_display(struct dash_display *out)
 
     memset(out, 0, sizeof(*out));
 
+    out->oil_pressure_state = tcan_rx_get(&l_can, TCAN_MSG_DATALOGGER_OILPRESSURE, buf);
+    if (out->oil_pressure_state != TCAN_RX_NEVER) {
+        struct trackcan_data_logger_oil_pressure_t p;
+
+        if (trackcan_data_logger_oil_pressure_unpack(&p, buf, TRACKCAN_DATA_LOGGER_OIL_PRESSURE_LENGTH) == 0) {
+            out->oil_pressure_psi_x10 = tcan_bar_x100_to_psi_x10(p.oil_pressure);
+        }
+    }
+
     out->analog_state = tcan_rx_get(&l_can, TCAN_MSG_DATALOGGER_ANALOG, buf);
     if (out->analog_state != TCAN_RX_NEVER) {
         struct trackcan_data_logger_analog_t a;
 
         if (trackcan_data_logger_analog_unpack(&a, buf, sizeof(buf)) == 0) {
-            out->oil_pressure_psi_x10 = tcan_bar_x100_to_psi_x10(a.oil_pressure);
             out->oil_temp_degf_x10 = tcan_degc_x10_to_degf_x10(a.oil_temp);
             out->coolant_temp_degf_x10 = tcan_degc_x10_to_degf_x10(a.coolant_temp);
             out->fuel_level_pct_x10 = a.fuel_level;

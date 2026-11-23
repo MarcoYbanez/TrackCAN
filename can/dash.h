@@ -23,8 +23,12 @@
 /* Everything the display layer needs, already in display units. Check the *_state fields:
  * a value is only meaningful while its state is TCAN_RX_FRESH. */
 struct dash_display {
-    tcan_rx_state_t analog_state;
+    /* The oil pressure has its own message (DataLogger_OilPressure, 50 Hz) and its own freshness, so a stalled slow message (temperatures,
+     * fuel level) can never hide it or switch off the low-oil alarm. analog_state is the slow message: oil temperature, coolant, fuel. */
+    tcan_rx_state_t oil_pressure_state;
     uint32_t oil_pressure_psi_x10;
+
+    tcan_rx_state_t analog_state;
     int32_t oil_temp_degf_x10;
     int32_t coolant_temp_degf_x10;
     uint16_t fuel_level_pct_x10;

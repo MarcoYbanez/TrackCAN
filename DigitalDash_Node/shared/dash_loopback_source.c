@@ -22,11 +22,17 @@
  * clock tick, but this simulation sends all of them from one loop, so each message starts on its
  * own step (20 ms) to keep the frames per step low (the Dash adds one of its own per step). A
  * message whose cycle is a multiple of the step keeps its phase from then on. */
-#define START_STEP_ANALOG 0u
-#define START_STEP_LIGHTS 1u
-#define START_STEP_HB_DATALOGGER 2u
+/*
+ * Per step the Dash itself sends its engine frame, and the simulated oil pressure (every 20 ms since TCAN-28) takes a second slot, so at most ONE other
+ * frame may fall on any step. The 100 ms messages (5 steps) take phases 1, 2 and 3 of every 5 steps; the three 1 s heartbeats sit on phase 0 (the Dash's
+ * own, from its first call) and phase 4 (the two simulated ones, on different steps of the 50-step second). That keeps every step at 3 frames or fewer.
+ */
+#define START_STEP_OILPRESSURE 1u
+#define START_STEP_ANALOG 1u
+#define START_STEP_LIGHTS 2u
 #define START_STEP_ETHANOL 3u
-#define START_STEP_HB_ETHANOL 4u
+#define START_STEP_HB_DATALOGGER 4u
+#define START_STEP_HB_ETHANOL 14u
 
 /*******************************************************
  * Public Function Definitions
@@ -58,7 +64,6 @@ void dash_loopback_source_step(dash_loopback_source_t *s, const dash_sim_out_t *
 
     if (step >= START_STEP_ANALOG && tcan_tx_due(&s->datalogger, TCAN_MSG_DATALOGGER_ANALOG)) {
         struct trackcan_data_logger_analog_t m = {
-            .oil_pressure = dash_loopback_psi_x10_to_bar_x100(drive->oil_pressure_psi_x10),
             .oil_temp = dash_loopback_degf_x10_to_degc_x10(drive->oil_temp_degf_x10),
             .coolant_temp = dash_loopback_degf_x10_to_degc_x10(drive->coolant_degf_x10),
             .fuel_level = drive->fuel_pct_x10,
@@ -66,6 +71,16 @@ void dash_loopback_source_step(dash_loopback_source_t *s, const dash_sim_out_t *
 
         if (trackcan_data_logger_analog_pack(buf, &m, sizeof(buf)) > 0) {
             (void)tcan_tx(&s->datalogger, TCAN_MSG_DATALOGGER_ANALOG, buf);
+        }
+    }
+
+    if (step >= START_STEP_OILPRESSURE && tcan_tx_due(&s->datalogger, TCAN_MSG_DATALOGGER_OILPRESSURE)) {
+        struct trackcan_data_logger_oil_pressure_t m = {
+            .oil_pressure = dash_loopback_psi_x10_to_bar_x100(drive->oil_pressure_psi_x10),
+        };
+
+        if (trackcan_data_logger_oil_pressure_pack(buf, &m, sizeof(buf)) > 0) {
+            (void)tcan_tx(&s->datalogger, TCAN_MSG_DATALOGGER_OILPRESSURE, buf);
         }
     }
 

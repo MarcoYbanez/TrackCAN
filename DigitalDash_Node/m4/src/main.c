@@ -155,6 +155,7 @@ int main(void)
                            DASH_EXTRA_AFR | DASH_EXTRA_GEAR;
 
         snap.display.analog_state = TCAN_RX_FRESH;
+        snap.display.oil_pressure_state = TCAN_RX_FRESH;
         snap.display.oil_pressure_psi_x10 = drive.oil_pressure_psi_x10;
         snap.display.oil_temp_degf_x10 = drive.oil_temp_degf_x10;
         snap.display.coolant_temp_degf_x10 = drive.coolant_degf_x10;
