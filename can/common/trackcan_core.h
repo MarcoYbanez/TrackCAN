@@ -31,6 +31,7 @@ typedef enum {
     TCAN_NODE_DASH = 0,
     TCAN_NODE_DATALOGGER,
     TCAN_NODE_ETHANOL,
+    TCAN_NODE_CONTROLLER, /* a button source on the bus, TBD: a dash button, a CAN keypad or d-pad */
 } tcan_node_t;
 
 /* Order matches can/trackcan.dbc. Add new messages before TCAN_MSG_COUNT. */
@@ -42,6 +43,8 @@ typedef enum {
     TCAN_MSG_HEARTBEAT_DASH,
     TCAN_MSG_HEARTBEAT_DATALOGGER,
     TCAN_MSG_HEARTBEAT_ETHANOL,
+    TCAN_MSG_DATALOGGER_STATUS,
+    TCAN_MSG_LOGGER_CONTROL,
     TCAN_MSG_COUNT,
 } tcan_msg_t;
 

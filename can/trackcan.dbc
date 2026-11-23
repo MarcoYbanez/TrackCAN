@@ -7,7 +7,7 @@ NS_ :
 
 BS_:
 
-BU_: Dash DataLogger Ethanol
+BU_: Dash DataLogger Ethanol Controller
 
 BO_ 256 Dash_Engine: 4 Dash
  SG_ Rpm : 0|16@1+ (1,0) [0|8000] "rpm" DataLogger
@@ -52,15 +52,24 @@ BO_ 1795 Heartbeat_Ethanol: 2 Ethanol
  SG_ Status : 0|8@1+ (1,0) [0|255] "" Dash,DataLogger
  SG_ Counter : 8|8@1+ (1,0) [0|255] "" Dash,DataLogger
 
+BO_ 514 DataLogger_Status: 1 DataLogger
+ SG_ LogMode : 0|2@1+ (1,0) [0|1] "" Dash,Controller
+ SG_ CardState : 2|2@1+ (1,0) [0|3] "" Dash,Controller
+
+BO_ 1024 Logger_Control: 1 Controller
+ SG_ LogButton : 0|1@1+ (1,0) [0|1] "" DataLogger
+
 BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
 BA_DEF_DEF_ "GenMsgCycleTime" 0;
 BA_ "GenMsgCycleTime" BO_ 256 20;
 BA_ "GenMsgCycleTime" BO_ 512 50;
 BA_ "GenMsgCycleTime" BO_ 513 100;
+BA_ "GenMsgCycleTime" BO_ 514 200;
 BA_ "GenMsgCycleTime" BO_ 768 100;
 BA_ "GenMsgCycleTime" BO_ 1793 1000;
 BA_ "GenMsgCycleTime" BO_ 1794 1000;
 BA_ "GenMsgCycleTime" BO_ 1795 1000;
+BA_ "GenMsgCycleTime" BO_ 1024 100;
 
 CM_ SG_ 768 FuelTemp "-3276.8 (raw 0x8000) means the fuel temperature is invalid.";
 CM_ SG_ 768 State "Ethanol output state. 0 Boot (output is the E85 default), 1 Qualifying, 2 Ok, 3 Holding (sensor lost, last qualified value held), 4 Critical.";
@@ -71,5 +80,11 @@ CM_ SG_ 768 DacWarning "1 = the DAC readback differs from the commanded output b
 CM_ SG_ 768 ResetRecent "1 = the node restarted from a watchdog reset since power-up.";
 CM_ SG_ 1795 Status "Ethanol Node active fault code, highest priority first: 4, 3, 6, 5, 2, 1. See value table.";
 
+CM_ SG_ 514 LogMode "DataLogger logging mode. 0 Daily (low rate, always on), 1 HighRes (every frame, started by the Logger_Control button and ended by it or by a time limit).";
+CM_ SG_ 514 CardState "SD card state. 0 Starting, 1 NoCard (not inserted, not seated or not answering), 2 Error (file system error), 3 Logging.";
+CM_ SG_ 1024 LogButton "1 = the logging button is pressed (a level, sent about every 100 ms and on change). The DataLogger toggles high-res logging on each press (rising edge). Source node TBD: a dash button, a CAN keypad or d-pad.";
+
+VAL_ 514 LogMode 0 "Daily" 1 "HighRes";
+VAL_ 514 CardState 0 "Starting" 1 "NoCard" 2 "Error" 3 "Logging";
 VAL_ 768 State 0 "Boot" 1 "Qualifying" 2 "Ok" 3 "Holding" 4 "Critical";
 VAL_ 1795 Status 0 "None" 1 "SensorLost" 2 "NeverQualified" 3 "DacMismatch" 4 "DacOvervoltage" 5 "WatchdogReset" 6 "DacI2cFailure";
