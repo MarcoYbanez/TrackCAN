@@ -13,11 +13,10 @@ BO_ 256 Dash_Engine: 4 Dash
  SG_ Rpm : 0|16@1+ (1,0) [0|8000] "rpm" DataLogger
  SG_ Speed : 16|16@1+ (0.01,0) [0|655.35] "km/h" DataLogger
 
-BO_ 512 DataLogger_Analog: 8 DataLogger
- SG_ OilPressure : 0|16@1+ (0.01,0) [0|655.35] "bar" Dash
- SG_ OilTemp : 16|16@1- (0.1,0) [-3276.8|3276.7] "degC" Dash
- SG_ CoolantTemp : 32|16@1- (0.1,0) [-3276.8|3276.7] "degC" Dash
- SG_ FuelLevel : 48|16@1+ (0.1,0) [0|6553.5] "%" Dash
+BO_ 512 DataLogger_Analog: 6 DataLogger
+ SG_ OilTemp : 0|16@1- (0.1,0) [-3276.8|3276.7] "degC" Dash
+ SG_ CoolantTemp : 16|16@1- (0.1,0) [-3276.8|3276.7] "degC" Dash
+ SG_ FuelLevel : 32|16@1+ (0.1,0) [0|6553.5] "%" Dash
 
 BO_ 513 DataLogger_Lights: 2 DataLogger
  SG_ CheckEngine : 0|1@1+ (1,0) [0|1] "" Dash
@@ -52,6 +51,9 @@ BO_ 1795 Heartbeat_Ethanol: 2 Ethanol
  SG_ Status : 0|8@1+ (1,0) [0|255] "" Dash,DataLogger
  SG_ Counter : 8|8@1+ (1,0) [0|255] "" Dash,DataLogger
 
+BO_ 515 DataLogger_OilPressure: 2 DataLogger
+ SG_ OilPressure : 0|16@1+ (0.01,0) [0|655.35] "bar" Dash
+
 BO_ 514 DataLogger_Status: 1 DataLogger
  SG_ LogMode : 0|2@1+ (1,0) [0|1] "" Dash,Controller
  SG_ CardState : 2|2@1+ (1,0) [0|3] "" Dash,Controller
@@ -62,7 +64,8 @@ BO_ 1024 Logger_Control: 1 Controller
 BA_DEF_ BO_ "GenMsgCycleTime" INT 0 65535;
 BA_DEF_DEF_ "GenMsgCycleTime" 0;
 BA_ "GenMsgCycleTime" BO_ 256 20;
-BA_ "GenMsgCycleTime" BO_ 512 50;
+BA_ "GenMsgCycleTime" BO_ 512 100;
+BA_ "GenMsgCycleTime" BO_ 515 20;
 BA_ "GenMsgCycleTime" BO_ 513 100;
 BA_ "GenMsgCycleTime" BO_ 514 200;
 BA_ "GenMsgCycleTime" BO_ 768 100;
@@ -71,6 +74,8 @@ BA_ "GenMsgCycleTime" BO_ 1794 1000;
 BA_ "GenMsgCycleTime" BO_ 1795 1000;
 BA_ "GenMsgCycleTime" BO_ 1024 100;
 
+CM_ BO_ 515 "Oil pressure alone, at 50 Hz (the logging-rate spec, docs/logging-rates.md), so the slow temperatures and fuel level do not ride at the fast rate and the oil-pressure alarm does not depend on them. Split from DataLogger_Analog (TCAN-28): older logs have the old 8-byte 0x200 layout with oil pressure first.";
+CM_ BO_ 512 "Oil temperature, coolant temperature and fuel level, at 10 Hz. Oil pressure moved to DataLogger_OilPressure (0x203) in TCAN-28; this message was 8 bytes with oil pressure first.";
 CM_ SG_ 768 FuelTemp "-3276.8 (raw 0x8000) means the fuel temperature is invalid.";
 CM_ SG_ 768 State "Ethanol output state. 0 Boot (output is the E85 default), 1 Qualifying, 2 Ok, 3 Holding (sensor lost, last qualified value held), 4 Critical.";
 CM_ SG_ 768 Critical "1 = extreme fault: show the big error. Latched until power cycle, except Never Qualified which clears once the sensor qualifies.";

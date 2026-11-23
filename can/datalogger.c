@@ -168,7 +168,6 @@ static void publish(void)
 
     if (tcan_tx_due(&l_can, TCAN_MSG_DATALOGGER_ANALOG)) {
         struct trackcan_data_logger_analog_t m = {
-            .oil_pressure = s.oil_pressure_bar_x100,
             .oil_temp = s.oil_temp_degc_x10,
             .coolant_temp = s.coolant_temp_degc_x10,
             .fuel_level = s.fuel_level_pct_x10,
@@ -176,6 +175,15 @@ static void publish(void)
 
         if (trackcan_data_logger_analog_pack(buf, &m, sizeof(buf)) > 0) {
             (void)tcan_tx(&l_can, TCAN_MSG_DATALOGGER_ANALOG, buf);
+        }
+    }
+
+    /* Oil pressure has its own fast message (50 Hz), so the slow signals above do not ride at that rate (docs/logging-rates.md). */
+    if (tcan_tx_due(&l_can, TCAN_MSG_DATALOGGER_OILPRESSURE)) {
+        struct trackcan_data_logger_oil_pressure_t m = {.oil_pressure = s.oil_pressure_bar_x100};
+
+        if (trackcan_data_logger_oil_pressure_pack(buf, &m, sizeof(buf)) > 0) {
+            (void)tcan_tx(&l_can, TCAN_MSG_DATALOGGER_OILPRESSURE, buf);
         }
     }
 
@@ -317,8 +325,9 @@ tcan_rx_state_t datalogger_can_get(tcan_msg_t msg, uint8_t data[TCAN_MAX_DLC])
 
 #ifdef DATALOGGER_CAN_BENCH_BUTTON
 /*
- * BENCH ONLY (needs DATALOGGER_CAN_LOOPBACK): plays a button on the bus, so the whole path (frame, edge logic, mode switch, file switch) can be tested
- * with no button hardware. Logger_Control level frames every 100 ms; the button is down for 500 ms at 20 s, 50 s and 80 s after start.
+ * BENCH ONLY (needs DATALOGGER_CAN_LOOPBACK): plays the other nodes on the bus, so the whole path (frames, edge logic, mode switch, file switch, the daily
+ * reduction) can be tested with no other hardware. Every 20 ms an engine frame (Dash_Engine, 0x100: rpm ramps 1000 to 6000, speed 0); every 100 ms a
+ * Logger_Control level frame, with the button down for 500 ms at 20 s, 50 s and 80 s after start.
  */
 static const uint32_t k_press_at_ms[] = {20000u, 50000u, 80000u};
 
@@ -327,23 +336,34 @@ static void bench_button_thread(void *p1, void *p2, void *p3)
     ARG_UNUSED(p1);
     ARG_UNUSED(p2);
     ARG_UNUSED(p3);
+    unsigned tick = 0;
 
     while (!l_can_up) {
         k_msleep(100);
     }
     for (;;) {
         uint32_t t = k_uptime_get_32();
-        bool down = false;
-        struct can_frame f = {.id = TRACKCAN_LOGGER_CONTROL_FRAME_ID, .dlc = 1};
+        struct can_frame e = {.id = TRACKCAN_DASH_ENGINE_FRAME_ID, .dlc = 4};
+        uint16_t rpm = (uint16_t)(1000u + (t / 4u) % 5000u);
 
-        for (unsigned i = 0; i < ARRAY_SIZE(k_press_at_ms); i++) {
-            if (t >= k_press_at_ms[i] && t < k_press_at_ms[i] + 500u) {
-                down = true;
+        e.data[0] = (uint8_t)(rpm & 0xFFu);
+        e.data[1] = (uint8_t)(rpm >> 8);
+        (void)can_send(l_can_dev, &e, K_NO_WAIT, NULL, NULL);
+
+        if (tick % 5u == 0u) {
+            bool down = false;
+            struct can_frame f = {.id = TRACKCAN_LOGGER_CONTROL_FRAME_ID, .dlc = 1};
+
+            for (unsigned i = 0; i < ARRAY_SIZE(k_press_at_ms); i++) {
+                if (t >= k_press_at_ms[i] && t < k_press_at_ms[i] + 500u) {
+                    down = true;
+                }
             }
+            f.data[0] = down ? 1u : 0u;
+            (void)can_send(l_can_dev, &f, K_NO_WAIT, NULL, NULL);
         }
-        f.data[0] = down ? 1u : 0u;
-        (void)can_send(l_can_dev, &f, K_NO_WAIT, NULL, NULL);
-        k_msleep(100);
+        tick++;
+        k_msleep(20);
     }
 }
 

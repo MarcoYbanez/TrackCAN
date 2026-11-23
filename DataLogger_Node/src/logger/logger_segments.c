@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "trackcan.h" /* the identifiers come from the CAN contract (can/trackcan.dbc), so the table cannot drift from it */
+
 /*******************************************************
  * Static Function Definitions
  *******************************************************/
@@ -90,6 +92,16 @@ bool seg_ring_over(const seg_ring_t *r, uint64_t quota_bytes)
 unsigned seg_ring_next_number(const seg_ring_t *r)
 {
 	return r->highest < SEG_FILE_NUMBER_MAX ? r->highest + 1u : 0u;
+}
+
+uint32_t seg_daily_interval_ms(uint32_t id)
+{
+	/* docs/logging-rates.md: 10 Hz daily for the fast channels that exist today. Add a channel here when its message exists. */
+	if (id == TRACKCAN_DASH_ENGINE_FRAME_ID || id == TRACKCAN_DATA_LOGGER_OIL_PRESSURE_FRAME_ID)
+	{
+		return SEG_DAILY_FAST_MS;
+	}
+	return SEG_DAILY_SLOW_MS;
 }
 
 void seg_decim_init(seg_decim_t *d)

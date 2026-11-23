@@ -21,10 +21,17 @@ FRAME = re.compile(r"^(\d+),(TX|RX),([0-9A-F]{3}),([0-8]),([0-9A-F]*)$")
 NOTE = re.compile(r"^(\d+),NOTE,,,(.*)$")
 FILE_NAME = re.compile(r"^(?:LOG(\d{4})|[DM](\d{7}))\.CSV$", re.IGNORECASE)  # old, daily, high-res
 HEARTBEAT_ID = 0x702
-DAILY_INTERVAL_MS = 1000  # the daily mode's reduction: one frame per (direction, ID) per second
+# The daily mode's reduction, from docs/logging-rates.md (the owner's table), written out here independently of the firmware: 10 Hz for engine RPM
+# (0x100) and oil pressure (0x203), 1 Hz for every other message. A daily log must never hold a message more densely than this.
+DAILY_FAST_IDS = {0x100, 0x203}
+
+
+def daily_interval_ms(fid):
+    return 100 if fid in DAILY_FAST_IDS else 1000
+
 JITTER_MS = 2  # two threads stamp a frame before queuing it: a step back of 1-2 ms is possible (bench flood only)
 FLOOD_ID, FLOOD_MARK_ID = 0x7F0, 0x7FF  # bench flood generator: sequence number and rate-step marker
-BENCH_BUTTON_ID = 0x400  # the bench button player writes Logger_Control straight onto the bus: seen only as received
+BENCH_PLAYER_IDS = {0x400, 0x100}  # the bench player writes Logger_Control and engine frames straight onto the bus: seen only as received
 
 
 def parse(name, lines):
@@ -96,8 +103,8 @@ def check(files, loopback):
         for name, recs, _ in parsed:
             for t, direction, fid, dlc, data in recs:
                 key = (direction, fid)
-                if key in seen_at and t - seen_at[key] < DAILY_INTERVAL_MS - JITTER_MS:
-                    problems.append(f"{name}: daily log has {direction} {fid:03X} twice within {t - seen_at[key]} ms (the reduction is {DAILY_INTERVAL_MS} ms)")
+                if key in seen_at and t - seen_at[key] < daily_interval_ms(fid) - JITTER_MS:
+                    problems.append(f"{name}: daily log has {direction} {fid:03X} twice within {t - seen_at[key]} ms (the reduction is {daily_interval_ms(fid)} ms)")
                     break
                 seen_at[key] = t
     info = {"tx": tx, "rx": rx, "notes": all_notes, "dropped": dropped, "last_t": last_t, "gaps": gaps_between, "seqs": seqs,
@@ -110,7 +117,7 @@ def check(files, loopback):
     info["heartbeat_gaps_explained"] = len(hb_gaps) if dropped else 0
     if loopback and not daily:
         for fid in sorted(set(tx) | set(rx)):
-            if fid in (FLOOD_ID, FLOOD_MARK_ID, BENCH_BUTTON_ID):
+            if fid in (FLOOD_ID, FLOOD_MARK_ID) or fid in BENCH_PLAYER_IDS:
                 continue  # the bench flood is TX only by design, and the bench button RX only
             if abs(tx[fid] - rx[fid]) > 2 + (len(parsed) - 1) * 2:  # a rollover may split a TX from its RX
                 problems.append(f"loopback ID {fid:03X}: {tx[fid]} TX but {rx[fid]} RX")

@@ -30,10 +30,10 @@ add_test(NAME logger_xfer COMMAND test_logger_xfer)
 
 # The daily and manual logging rules (TCAN-20).
 add_library(logger_segments STATIC ${CMAKE_CURRENT_LIST_DIR}/../src/logger/logger_segments.c)
-target_include_directories(logger_segments PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../src/logger)
+target_include_directories(logger_segments PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../src/logger ${CMAKE_CURRENT_LIST_DIR}/../../can/generated)
 target_compile_options(logger_segments PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
 add_executable(test_logger_segments test_logger_segments.c)
-target_link_libraries(test_logger_segments PRIVATE logger_segments)
+target_link_libraries(test_logger_segments PRIVATE logger_segments logger_core)
 target_compile_options(test_logger_segments PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
 target_link_options(test_logger_segments PRIVATE -fsanitize=address,undefined)
 add_test(NAME logger_segments COMMAND test_logger_segments)

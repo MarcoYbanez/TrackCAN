@@ -75,7 +75,6 @@ LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
 #ifndef DATALOGGER_SD_START_MANUAL
 #define DATALOGGER_SD_START_MANUAL 0 /* bench only: start in high-res mode, as if the button had been pressed at power-up */
 #endif
-#define DAILY_INTERVAL_MS 1000u
 #define BUTTON_DEBOUNCE_MS 300u
 #define BUTTON_STALE_MS 400u /* the button frame comes every 100 ms; this many ms without one and the button is forgotten */
 #define MAX_DELETES_PER_CALL 8
@@ -380,6 +379,56 @@ static int scan_family(seg_family_t fam, seg_ring_t *ring)
 	return 0;
 }
 
+/* Housekeeping at start-up: a zero-byte D or M file holds no data. A header that could not be written used to leave one behind per retry, so they can pile up. Only
+ * the logger's own names are touched, and only empty ones. The names are collected first: deleting while the directory is being read can skip entries. */
+static void remove_empty_files(void)
+{
+	enum { BATCH = 16, PASSES = 8 };
+
+	if (k_mutex_lock(&l_serve_lock, K_NO_WAIT) != 0)
+	{
+		return;
+	}
+	for (int pass = 0; pass < PASSES; pass++)
+	{
+		char names[BATCH][SEG_FILE_NAME_LEN];
+		struct fs_dir_t dir;
+		struct fs_dirent ent;
+		int count = 0;
+
+		fs_dir_t_init(&dir);
+		if (fs_opendir(&dir, MOUNT_POINT) < 0)
+		{
+			break;
+		}
+		while (count < BATCH && fs_readdir(&dir, &ent) == 0 && ent.name[0] != '\0')
+		{
+			unsigned n;
+
+			if (ent.type == FS_DIR_ENTRY_FILE && ent.size == 0 && (seg_parse_name(ent.name, SEG_DAILY, &n) || seg_parse_name(ent.name, SEG_MANUAL, &n)))
+			{
+				(void)snprintf(names[count++], SEG_FILE_NAME_LEN, "%s", ent.name);
+			}
+		}
+		(void)fs_closedir(&dir);
+		if (count == 0)
+		{
+			break;
+		}
+		for (int i = 0; i < count; i++)
+		{
+			char path[sizeof(MOUNT_POINT) + SEG_FILE_NAME_LEN + 1];
+
+			(void)snprintf(path, sizeof(path), MOUNT_POINT "/%s", names[i]);
+			if (fs_unlink(path) == 0)
+			{
+				LOG_INF("removed the empty file %s", names[i]);
+			}
+		}
+	}
+	k_mutex_unlock(&l_serve_lock);
+}
+
 /* The ring: while the family holds more than its quota, delete its OWN oldest file. Never the newest (the open one), never another family's
  * file, never a file the USB copy is reading. A failure to delete is reported and the logger carries on. */
 static void enforce_quota(seg_family_t fam)
@@ -500,7 +549,7 @@ static int start_file(seg_family_t fam, unsigned number, const char *continues)
 	if (ret == 0)
 	{
 		/* Every file says what it is. A daily file is a reduced stream: analysis tools must not expect every frame in it. */
-		n = logger_format_note(line, sizeof(line), k_uptime_get_32(), fam == SEG_MANUAL ? "mode=highres every frame" : "mode=daily one frame per ID per second");
+		n = logger_format_note(line, sizeof(line), k_uptime_get_32(), fam == SEG_MANUAL ? SEG_NOTE_MANUAL : SEG_NOTE_DAILY);
 		ret = n > 0 ? append(line, n, k_uptime_get_32()) : -EINVAL;
 	}
 	if (ret == 0 && continues != NULL)
@@ -524,6 +573,7 @@ static int start_file(seg_family_t fam, unsigned number, const char *continues)
 		LOG_ERR("cannot write the header of %s", path);
 		(void)fs_close(&l_file);
 		fs_file_t_init(&l_file);
+		(void)fs_unlink(path); /* the logger's own new file, with no data: do not leave an empty file (and a burnt number) per retry */
 		set_state(SD_LOGGER_FS_ERROR);
 		return -EIO;
 	}
@@ -642,6 +692,7 @@ static int open_log(void)
 		set_state(SD_LOGGER_FS_ERROR);
 		return ret;
 	}
+	remove_empty_files();
 	{
 		seg_ring_t ring;
 
@@ -672,10 +723,10 @@ static void close_log(void)
 	(void)disk_access_ioctl(DISK_NAME, DISK_IOCTL_CTRL_DEINIT, NULL);
 }
 
-/* Daily mode keeps about one frame per (direction, CAN ID) per second; high-res keeps every frame. */
+/* Daily mode keeps one frame per (direction, CAN ID) per its interval (100 ms for the fast channels, else 1 s: docs/logging-rates.md); high-res keeps every frame. */
 static bool frame_wanted(const struct rec *r)
 {
-	if (l_modectl.mode == SEG_MODE_MANUAL || seg_decim_keep(&l_decim, r->tx != 0u, r->id, r->t_ms, DAILY_INTERVAL_MS))
+	if (l_modectl.mode == SEG_MODE_MANUAL || seg_decim_keep(&l_decim, r->tx != 0u, r->id, r->t_ms, seg_daily_interval_ms(r->id)))
 	{
 		return true;
 	}

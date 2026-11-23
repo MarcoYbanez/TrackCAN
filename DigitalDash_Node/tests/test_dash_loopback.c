@@ -98,6 +98,8 @@ static void test_demo_drive_survives_the_bus_round_trip(void)
     struct dash_display d;
     unsigned checked = 0;
     unsigned worst_psi = 0, worst_degf = 0;
+    int32_t prev_coolant = 0;
+    unsigned max_coolant_step = 0; /* the drive's largest coolant change in one 20 ms step, tenths of a degree F */
 
     l_head = l_tail = 0;
     l_now = 1000;
@@ -113,6 +115,10 @@ static void test_demo_drive_survives_the_bus_round_trip(void)
         dash_sim_step(&sim, 20, &drive);
         dash_loopback_source_step(&src, &drive);
         dash_can_step();
+        if (i > 0 && (unsigned)absdiff(drive.coolant_degf_x10, prev_coolant) > max_coolant_step) {
+            max_coolant_step = (unsigned)absdiff(drive.coolant_degf_x10, prev_coolant);
+        }
+        prev_coolant = drive.coolant_degf_x10;
         if (l_sent_this_step > l_max_burst) {
             l_max_burst = l_sent_this_step;
         }
@@ -122,6 +128,7 @@ static void test_demo_drive_survives_the_bus_round_trip(void)
             continue; /* the first cycle of every message has to arrive */
         }
         CHECK(d.analog_state == TCAN_RX_FRESH);
+        CHECK(d.oil_pressure_state == TCAN_RX_FRESH);
         CHECK(d.lights_state == TCAN_RX_FRESH);
         CHECK(d.ethanol_state == TCAN_RX_FRESH);
         CHECK(!d.ethanol_alert);
@@ -129,8 +136,8 @@ static void test_demo_drive_survives_the_bus_round_trip(void)
         CHECK(d.ethanol_node_state == 2 && !d.ethanol_output_default);
         CHECK(d.fuel_temp_valid);
 
-        /* The analog message is sent every 50 ms, so the display value is the drive's value from up
-         * to 50 ms ago: compare with a tolerance for the drive's own motion, and exactly for the
+        /* The slow analog message (temperatures, fuel) is sent every 100 ms and the oil pressure every 20 ms, so a display value is
+         * the drive's value from up to that long ago: compare with a tolerance for the drive's own motion, and exactly for the
          * slow-moving fuel and lamps. */
         worst_psi =
             (unsigned)absdiff((int)d.oil_pressure_psi_x10, (int)drive.oil_pressure_psi_x10) >
@@ -143,8 +150,10 @@ static void test_demo_drive_survives_the_bus_round_trip(void)
         checked++;
     }
     CHECK(checked > 59000u);
-    CHECK(worst_psi <= 120); /* oil pressure moves at most a few psi in 50 ms (rpm sweeps) */
-    CHECK(worst_degf <= 3);  /* coolant is slow: well under a degree, rounding aside */
+    CHECK(worst_psi <= 120); /* oil pressure moves at most a few psi in 20 ms (rpm sweeps) */
+    /* The coolant reaches the display up to 100 ms late (the slow message's cycle): five 20 ms steps of the drive's own motion, plus 2 tenths for
+     * the degree F to degree C to degree F rounding. The bound follows from the cycle time, it is not a number chosen to pass. */
+    CHECK(worst_degf <= 5u * max_coolant_step + 2u);
     CHECK(l_sent > 4000u);   /* messages really went out */
     /* The FDCAN controller has 3 transmit buffers: no 20 ms step may send more frames than that
      * (the Dash's own included). */

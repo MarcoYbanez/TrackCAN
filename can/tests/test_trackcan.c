@@ -115,7 +115,7 @@ static void test_message_table(void)
         tcan_node_t sender;
     } expect[] = {
         {TCAN_MSG_DASH_ENGINE, 0x100, 4, 20, TCAN_NODE_DASH},
-        {TCAN_MSG_DATALOGGER_ANALOG, 0x200, 8, 50, TCAN_NODE_DATALOGGER},
+        {TCAN_MSG_DATALOGGER_ANALOG, 0x200, 6, 100, TCAN_NODE_DATALOGGER},
         {TCAN_MSG_DATALOGGER_LIGHTS, 0x201, 2, 100, TCAN_NODE_DATALOGGER},
         {TCAN_MSG_ETHANOL_DATA, 0x300, 4, 100, TCAN_NODE_ETHANOL},
         {TCAN_MSG_HEARTBEAT_DASH, 0x701, 2, 1000, TCAN_NODE_DASH},
@@ -123,6 +123,7 @@ static void test_message_table(void)
         {TCAN_MSG_HEARTBEAT_ETHANOL, 0x703, 2, 1000, TCAN_NODE_ETHANOL},
         {TCAN_MSG_DATALOGGER_STATUS, 0x202, 1, 200, TCAN_NODE_DATALOGGER},
         {TCAN_MSG_LOGGER_CONTROL, 0x400, 1, 100, TCAN_NODE_CONTROLLER},
+        {TCAN_MSG_DATALOGGER_OILPRESSURE, 0x203, 2, 20, TCAN_NODE_DATALOGGER},
     };
 
     for (unsigned i = 0; i < sizeof(expect) / sizeof(expect[0]); i++) {
@@ -152,16 +153,27 @@ static void test_pack_known_bytes(void)
         CHECK_BYTES(buf, want);
     }
 
-    /* DataLogger_Analog: 4.50 bar = 450 = 0x01C2; -40.0 degC = -400 = 0xFE70;
-     * 95.0 degC = 950 = 0x03B6; 75.5 % = 755 = 0x02F3. */
+    /* DataLogger_Analog (slow, 6 bytes since TCAN-28): -40.0 degC = -400 = 0xFE70;
+     * 95.0 degC = 950 = 0x03B6; 75.5 % = 755 = 0x02F3. Oil pressure is no longer in it. */
     {
-        struct trackcan_data_logger_analog_t s = {
-            .oil_pressure = 450, .oil_temp = -400, .coolant_temp = 950, .fuel_level = 755};
-        static const uint8_t want[] = {0xC2, 0x01, 0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
+        struct trackcan_data_logger_analog_t s = {.oil_temp = -400, .coolant_temp = 950, .fuel_level = 755};
+        static const uint8_t want[] = {0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
 
         memset(buf, 0xEE, sizeof(buf));
-        CHECK(trackcan_data_logger_analog_pack(buf, &s, sizeof(buf)) == 8);
+        CHECK(trackcan_data_logger_analog_pack(buf, &s, sizeof(buf)) == 6);
         CHECK_BYTES(buf, want);
+        CHECK(buf[6] == 0xEE && buf[7] == 0xEE); /* the unused bytes are not touched */
+    }
+
+    /* DataLogger_OilPressure (fast, 2 bytes): 4.50 bar = 450 = 0x01C2, little-endian C2 01. */
+    {
+        struct trackcan_data_logger_oil_pressure_t s = {.oil_pressure = 450};
+        static const uint8_t want[] = {0xC2, 0x01};
+
+        memset(buf, 0xEE, sizeof(buf));
+        CHECK(trackcan_data_logger_oil_pressure_pack(buf, &s, sizeof(buf)) == 2);
+        CHECK_BYTES(buf, want);
+        CHECK(buf[2] == 0xEE);
     }
 
     /* DataLogger_Lights: byte 0 bit 0 check engine ... bit 7 high beam, byte 1 bit 0 charge
@@ -228,13 +240,18 @@ static void test_pack_known_bytes(void)
 static void test_unpack_known_bytes(void)
 {
     /* Decode hand-written bytes (the reverse direction, also independent of pack). */
-    static const uint8_t analog[] = {0xC2, 0x01, 0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
+    static const uint8_t analog[] = {0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
+    static const uint8_t oil[] = {0xC2, 0x01};
     static const uint8_t lights[] = {0x01, 0x01};
     struct trackcan_data_logger_analog_t a;
+    struct trackcan_data_logger_oil_pressure_t o;
     struct trackcan_data_logger_lights_t l;
 
+    CHECK(trackcan_data_logger_oil_pressure_unpack(&o, oil, sizeof(oil)) == 0);
+    CHECK(o.oil_pressure == 450);
+    CHECK(trackcan_data_logger_oil_pressure_unpack(&o, oil, 1) != 0); /* too short */
+
     CHECK(trackcan_data_logger_analog_unpack(&a, analog, sizeof(analog)) == 0);
-    CHECK(a.oil_pressure == 450);
     CHECK(a.oil_temp == -400);
     CHECK(a.coolant_temp == 950);
     CHECK(a.fuel_level == 755);
@@ -245,7 +262,7 @@ static void test_unpack_known_bytes(void)
     CHECK(l.charge_warning == 1);
 
     /* Too-short buffers are rejected rather than read out of bounds. */
-    CHECK(trackcan_data_logger_analog_unpack(&a, analog, 7) != 0);
+    CHECK(trackcan_data_logger_analog_unpack(&a, analog, 5) != 0);
 }
 
 static void test_logger_messages(void)
@@ -441,8 +458,9 @@ static void test_unit_conversion(void)
 static void test_dash_display_and_publish(void)
 {
     struct dash_display d;
-    /* DataLogger_Analog, hand-computed: 4.50 bar, -40.0 C, 95.0 C, 75.5 %. */
-    static const uint8_t analog[] = {0xC2, 0x01, 0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
+    /* DataLogger_Analog (slow) and DataLogger_OilPressure (fast), hand-computed: -40.0 C, 95.0 C, 75.5 % and 4.50 bar. */
+    static const uint8_t analog[] = {0x70, 0xFE, 0xB6, 0x03, 0xF3, 0x02};
+    static const uint8_t oil[] = {0xC2, 0x01};
     static const uint8_t lights[] = {0x84, 0x01};
     static const uint8_t ethanol[] = {0x55, 0x85, 0xFF, 0x23}; /* 85 %, -12.3 C, Holding */
 
@@ -450,15 +468,18 @@ static void test_dash_display_and_publish(void)
     CHECK(dash_can_init(&l_port));
     dash_can_get_display(&d);
     CHECK(d.analog_state == TCAN_RX_NEVER);
+    CHECK(d.oil_pressure_state == TCAN_RX_NEVER);
 
     l_now = 5000;
-    fake_inject(0x200, 8, analog);
+    fake_inject(0x200, 6, analog);
+    fake_inject(0x203, 2, oil);
     fake_inject(0x201, 2, lights);
     fake_inject(0x300, 4, ethanol);
     dash_can_step();
     dash_can_get_display(&d);
 
     CHECK(d.analog_state == TCAN_RX_FRESH);
+    CHECK(d.oil_pressure_state == TCAN_RX_FRESH);
     CHECK(d.oil_pressure_psi_x10 == 653);   /* 4.50 bar = 65.3 psi */
     CHECK(d.oil_temp_degf_x10 == -400);     /* -40.0 C = -40.0 F */
     CHECK(d.coolant_temp_degf_x10 == 2030); /* 95.0 C = 203.0 F */
@@ -469,13 +490,27 @@ static void test_dash_display_and_publish(void)
     CHECK(d.fuel_temp_valid);
     CHECK(d.ethanol_node_state == 3 && !d.ethanol_output_default && !d.ethanol_alert);
 
-    /* DataLogger_Analog has a 50 ms cycle, so it goes stale after 150 ms. */
-    l_now = 5150;
+    /* Each analog message goes stale after 3 of its own cycles: the oil pressure (20 ms cycle) after 60 ms, the slow message (100 ms) after
+     * 300 ms. They are independent: the oil pressure going quiet must not blank the temperatures, and the other way round. */
+    l_now = 5060;
+    dash_can_get_display(&d);
+    CHECK(d.oil_pressure_state == TCAN_RX_FRESH && d.analog_state == TCAN_RX_FRESH);
+    l_now = 5061;
+    dash_can_get_display(&d);
+    CHECK(d.oil_pressure_state == TCAN_RX_STALE); /* 61 ms without the 20 ms message */
+    CHECK(d.analog_state == TCAN_RX_FRESH);       /* the slow message is only 61 ms old */
+    l_now = 5300;
     dash_can_get_display(&d);
     CHECK(d.analog_state == TCAN_RX_FRESH);
-    l_now = 5151;
+    l_now = 5301;
     dash_can_get_display(&d);
     CHECK(d.analog_state == TCAN_RX_STALE);
+
+    /* A fresh oil pressure message keeps oil_pressure_state fresh while the slow message is stale. */
+    fake_inject(0x203, 2, oil);
+    dash_can_step();
+    dash_can_get_display(&d);
+    CHECK(d.oil_pressure_state == TCAN_RX_FRESH && d.analog_state == TCAN_RX_STALE);
 
     /* The Dash sends Dash_Engine: rpm 3500, speed 123.45 km/h -> AC 0D 39 30. */
     dash_can_set_engine(3500, 12345);
