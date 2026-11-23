@@ -17,3 +17,13 @@ target_link_libraries(test_logger_core PRIVATE logger_core)
 target_compile_options(test_logger_core PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
 target_link_options(test_logger_core PRIVATE -fsanitize=address,undefined)
 add_test(NAME logger_core COMMAND test_logger_core)
+
+# The USB log copy protocol (TCAN-21).
+add_library(logger_xfer STATIC ${CMAKE_CURRENT_LIST_DIR}/../src/transfer/logger_xfer.c)
+target_include_directories(logger_xfer PUBLIC ${CMAKE_CURRENT_LIST_DIR}/../src/transfer)
+target_compile_options(logger_xfer PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
+add_executable(test_logger_xfer transfer/test_logger_xfer.c)
+target_link_libraries(test_logger_xfer PRIVATE logger_xfer)
+target_compile_options(test_logger_xfer PRIVATE -Wall -Wextra -fsanitize=address,undefined -fno-sanitize-recover=undefined)
+target_link_options(test_logger_xfer PRIVATE -fsanitize=address,undefined)
+add_test(NAME logger_xfer COMMAND test_logger_xfer)

@@ -29,7 +29,7 @@ LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
  * Macros
  *******************************************************/
 #define DISK_NAME "SD"
-#define MOUNT_POINT "/SD:"
+#define MOUNT_POINT SD_LOGGER_MOUNT_POINT
 #define THREAD_STACK_SIZE 4096
 #define THREAD_PRIORITY 10 /* below the CAN thread (7): logging never delays the bus */
 #define QUEUE_LEN 2048 /* frames queued while the file opens (about 1 s), a file rolls over, or the card is slow: 32 KB, 0.25 s at 8000 frames/s */
@@ -698,4 +698,9 @@ bool sd_logger_prepare_reboot(uint32_t timeout_ms)
 sd_logger_state_t sd_logger_state(void)
 {
 	return (sd_logger_state_t)atomic_get(&l_state);
+}
+
+unsigned sd_logger_open_number(void)
+{
+	return sd_logger_state() == SD_LOGGER_LOGGING ? l_number : 0u;
 }

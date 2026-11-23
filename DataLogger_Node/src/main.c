@@ -1,5 +1,8 @@
 
 #include "bootloader_control.h"
+#ifndef DATALOGGER_NO_SD
+#include "transfer/usb_transfer.h"
+#endif
 #include <stdio.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -34,6 +37,10 @@ int main(void)
 	}
 #ifndef DATALOGGER_NO_SD
 	sd_logger_start(); /* the SD card logger runs in its own thread */
+	if (usb_transfer_start() < 0)
+	{
+		printf("USB log copy unavailable\n");
+	}
 #endif
 
 	struct spi_buf_set rx_channels[8] = {
