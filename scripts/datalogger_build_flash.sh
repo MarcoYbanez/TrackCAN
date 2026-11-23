@@ -6,7 +6,7 @@
 # Variants, to find where the boot hang is (TCAN-17, see docs/journal/2026-11-22-tcan17-datalogger-boot-hang-handoff.md):
 #   full       CAN logic + SD logger                       -> build/datalogger_sd
 #   nosd       CAN logic, no SD                            -> build/datalogger_nosd
-#   loopback   full, with the CAN controller in loopback (bench) -> build/datalogger_loopback
+#   loopback   full, with the CAN controller in loopback and a 100 ms console time mark (bench) -> build/datalogger_loopback
 #   flood      loopback plus a rising-rate frame generator into the logger (bench) -> build/datalogger_flood
 #   scaffold   neither: the original bring-up firmware     -> build/datalogger_scaffold
 # The Teensy has no debug probe: it is flashed by its USB bootloader (teensy_loader_cli).
@@ -25,7 +25,7 @@ case "$VARIANT" in
     nosd) BUILD="$ROOT/build/datalogger_nosd"
           EXTRA=(-DDATALOGGER_SD=OFF -DCONFIG_DISK_ACCESS=n -DCONFIG_FILE_SYSTEM=n -DCONFIG_FAT_FILESYSTEM_ELM=n) ;;
     loopback) BUILD="$ROOT/build/datalogger_loopback"
-          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON) ;;
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_CUTTEST=ON) ;;
     flood) BUILD="$ROOT/build/datalogger_flood"
           EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON) ;;
     scaffold) BUILD="$ROOT/build/datalogger_scaffold"

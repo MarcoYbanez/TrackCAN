@@ -91,7 +91,7 @@ static void set_state(sd_logger_state_t s)
 {
 	if ((sd_logger_state_t)atomic_get(&l_state) != s)
 	{
-		static const char *const names[] = { "starting", "no card", "file system error", "logging" };
+		static const char *const names[] = { "starting", "no card (not inserted or not fully seated?)", "file system error", "logging" };
 
 		LOG_INF("SD logger: %s", names[s]);
 		atomic_set(&l_state, s);
@@ -409,6 +409,19 @@ static int run_logging(void)
 		}
 		now = k_uptime_get_32();
 		led_update(now);
+#ifdef DATALOGGER_SD_BENCH_CUTTEST
+		/* BENCH ONLY: the console shows the uptime every 100 ms, so after a power cut the last console time minus the last record's
+		 * time in the file is how much the cut lost. */
+		{
+			static uint32_t last_mark_ms;
+
+			if ((uint32_t)(now - last_mark_ms) >= 100u)
+			{
+				printk("T=%u\n", (unsigned)now);
+				last_mark_ms = now;
+			}
+		}
+#endif
 
 		/* Say in the file when frames were lost because the queue was full. */
 		if ((uint32_t)(now - last_note_ms) >= 1000u)

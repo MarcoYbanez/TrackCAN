@@ -17,12 +17,16 @@ Bench only: the CAN controller ran in loopback (no other node), the card is a Sa
 ## Not verified / open
 - **How much a power cut loses.** The files end cleanly and the logger syncs every 1 s (`SYNC_MS`), but the moment of each cut is unknown, so the loss
   window is not measured. It needs a cut at a known time (for example a relay, or a marker printed on the console just before).
-- **Why the card got stuck.** One reflash from an image WITHOUT the clean-close step left the card failing with `Card never left busy state` until a power
-  cycle (then it took about 17 s to come up: LOG0003). The Teensy's SD socket has no power control (Zephyr warns about it). My explanation (a soft reset
-  mid-write leaves the card busy) fits the data but is one occurrence. The five clean-close reflashes did not reproduce it. A reboot that is NOT preceded
-  by the handshake (a crash, the watchdog, the PROGRAM button) could still leave the card stuck; the logger retries every 2 s and recovers after a power cycle.
-- **The "bus-off with no other node" explanation** I gave for the 1.6 s log (LOG0002) is NOT confirmed. ISO 11898-1 error-passive transmitters do not
-  go bus-off from ACK errors alone, so the controller may have sat error-passive with its mailboxes full. The status line now prints the CAN state and
-  TEC/REC; run the non-loopback image with the card in to see which it is. This matters for TCAN-11 (real bus).
+- **The "stuck card" was a card that was not fully seated  [verified: observed, 3 occurrences].** Three times the SD driver logged `Card does not
+  support CMD8, assuming legacy card` after 1 s and `Card never left busy state` every 3.4 s; a 5 s and a multi-minute power cycle did not clear it,
+  and it never recovered by itself in 3.5 minutes. Each time the card had just been pulled and put back by hand (first after reading it in the Mac).
+  On the third occurrence the owner found the card was not pushed in; once seated it mounted at once, with no power cycle or reboot, and the logger
+  noticed the card itself. My earlier explanations (a soft reset mid-write; the Mac reader's signalling mode; power-off time; the missing power
+  control on the SD socket) were guesses and are **not supported**. The earlier first-time recovery after about 17 s is most likely a re-seat during that unplug (not proven).
+  The clean-close handshake before a USB reboot is still correct practice but was never shown to fix anything. The log now says "not inserted or not fully seated?".
+- **CAN with no other node  [verified: observed]:** the non-loopback image sat at **error-active, TEC 0, REC 0** for 75 s, so it was NOT bus-off and NOT
+  error-passive (my earlier bus-off explanation was wrong). With no errors counted and the log stopping after about 1.6 s (50 lines), the controller
+  most likely stops transmitting without trying (for example it never sees an idle bus with no transceiver or other node) [unverified]. This is TCAN-11's
+  to settle: it needs a transceiver and a second node.
 - **1 to 2 ms timestamp jitter** appears when two threads queue frames (only the bench flood does); the checker tolerates 2 ms. In production only the CAN thread queues.
 - The real bus, real traffic and CAN errors are untested; no other node was connected.
