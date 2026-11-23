@@ -3226,10 +3226,10 @@
 						)
 					)
 				)
-				(pin no_connect line
+				(pin bidirectional line
 					(at 17.78 26.67 180)
 					(length 2.54)
-					(name "0"
+					(name "0/RX1"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3244,10 +3244,10 @@
 						)
 					)
 				)
-				(pin no_connect line
+				(pin bidirectional line
 					(at 17.78 24.13 180)
 					(length 2.54)
-					(name "1"
+					(name "1/TX1"
 						(effects
 							(font
 								(size 1.27 1.27)
@@ -3763,6 +3763,213 @@
 			)
 			(embedded_fonts no)
 		)
+		(symbol "Connector_Generic:Conn_01x03"
+			(pin_names
+				(offset 1.016)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(in_pos_files yes)
+			(duplicate_pin_numbers_are_jumpers no)
+			(property "Reference" "J"
+				(at 0 5.08 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Value" "Conn_01x03"
+				(at 0 -5.08 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "Description" "Generic connector, single row, 01x03, script generated (kicad-library-utils/schlib/autogen/connector/)"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_keywords" "connector"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(property "ki_fp_filters" "Connector*:*_1x??_*"
+				(at 0 0 0)
+				(show_name no)
+				(do_not_autoplace no)
+				(hide yes)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+				)
+			)
+			(symbol "Conn_01x03_1_1"
+				(rectangle
+					(start -1.27 3.81)
+					(end 1.27 -3.81)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type background)
+					)
+				)
+				(rectangle
+					(start -1.27 2.667)
+					(end 0 2.413)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 0.127)
+					(end 0 -0.127)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(rectangle
+					(start -1.27 -2.413)
+					(end 0 -2.667)
+					(stroke
+						(width 0.1524)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(pin passive line
+					(at -5.08 2.54 0)
+					(length 3.81)
+					(name "Pin_1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 0 0)
+					(length 3.81)
+					(name "Pin_2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at -5.08 -2.54 0)
+					(length 3.81)
+					(name "Pin_3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+	)
+	(text "TCAN-27 Data Logger. Teensy 4.1 on female headers. 12V in, reverse-polarity P-FET (Q1), TVS (D3), OKI-78SR-5 to Teensy VIN through D1.\nMCP3208 runs on 3V3 (Teensy pins are not 5V tolerant): sensors 0-5V divided by (2.2k+470)/4.7k to about 3.2V, D4-D7 clamp to 3V3."
+		(at 20.32 12.7 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "047b3242-5fc4-4ac0-8356-a2a7e62e92d0")
+	)
+	(text "OPEN CHECKS before building: (1) PJRC says do not power VIN while USB is connected: cut the VUSB-VIN pad pair on the Teensy bottom, or never connect both.\n(2) OKI-78SR datasheet absolute-max input NOT verified. D3 is 1.5KE24A (clamp ~33V). The owned 1.5KE36A clamps ~50V, which may exceed the OKI limit.\n(3) No fuse on 12V input yet."
+		(at 20.32 19.05 0)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left bottom)
+		)
+		(uuid "611d01a7-7963-48af-b274-63c5a8c93626")
 	)
 	(label "GND"
 		(at 20.32 35.56 180)
@@ -4954,15 +5161,40 @@
 		)
 		(uuid "04cdf9d3-ad85-4ce6-be43-22f4b3a808cb")
 	)
-  (text "TCAN-27 Data Logger. Teensy 4.1 on female headers. 12V in, reverse-polarity P-FET (Q1), TVS (D3), OKI-78SR-5 to Teensy VIN through D1.\nMCP3208 runs on 3V3 (Teensy pins are not 5V tolerant): sensors 0-5V divided by (2.2k+470)/4.7k to about 3.2V, D4-D7 clamp to 3V3."
-    (at 20.32 12.7 0)
-    (effects (font (size 1.27 1.27)) (justify left bottom))
-    (uuid "047b3242-5fc4-4ac0-8356-a2a7e62e92d0")
+  (label "GND"
+    (at 236.22 160.02 180)
+    (fields_autoplaced yes)
+    (effects (font (size 1.27 1.27)) (justify right bottom))
+    (uuid "3bab748b-68bc-47c4-b7a2-63ff1e0191a1")
   )
-  (text "OPEN CHECKS before building: (1) PJRC says do not power VIN while USB is connected: cut the VUSB-VIN pad pair on the Teensy bottom, or never connect both.\n(2) OKI-78SR datasheet absolute-max input NOT verified. D3 is 1.5KE24A (clamp ~33V). The owned 1.5KE36A clamps ~50V, which may exceed the OKI limit.\n(3) No fuse on 12V input yet."
-    (at 20.32 19.05 0)
+  (label "CON_RX"
+    (at 236.22 162.56 180)
+    (fields_autoplaced yes)
+    (effects (font (size 1.27 1.27)) (justify right bottom))
+    (uuid "99e584b8-8817-4326-a76a-a39e21aa9afc")
+  )
+  (label "CON_RX"
+    (at 269.24 77.47 0)
+    (fields_autoplaced yes)
     (effects (font (size 1.27 1.27)) (justify left bottom))
-    (uuid "611d01a7-7963-48af-b274-63c5a8c93626")
+    (uuid "874bf2a8-0887-4fc3-9db9-7e1dd7d3c35e")
+  )
+  (label "CON_TX"
+    (at 236.22 165.1 180)
+    (fields_autoplaced yes)
+    (effects (font (size 1.27 1.27)) (justify right bottom))
+    (uuid "2e502557-bd9f-4c90-bd73-87ae18874963")
+  )
+  (label "CON_TX"
+    (at 269.24 80.01 0)
+    (fields_autoplaced yes)
+    (effects (font (size 1.27 1.27)) (justify left bottom))
+    (uuid "69c9267d-a7ae-4b64-9e84-58c2ef53854c")
+  )
+  (text "J3 console (LPUART6, 115200 baud, 3.3V LOGIC ONLY): pin1 GND, pin2 = Teensy RX (pin 0, connect adapter TX), pin3 = Teensy TX (pin 1, connect adapter RX)."
+    (at 215.9 152.4 0)
+    (effects (font (size 1.27 1.27)) (justify left bottom))
+    (uuid "94f0bb16-5060-480f-a014-b97ef322fd8d")
   )
 	(symbol
 		(lib_id "Connector_Generic:Conn_01x04")
@@ -7633,6 +7865,66 @@
 			(project "Datalogger"
 				(path "/2e0b602c-b1b7-453a-9022-c329951e2da5"
 					(reference "#PWR03")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "Connector_Generic:Conn_01x03")
+		(at 241.3 162.56 0)
+		(unit 1)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "bfea0dc0-c499-4630-8cb9-2843feb8b928")
+		(property "Reference" "J3"
+			(at 241.3 157.48 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Value" "CONSOLE"
+			(at 241.3 167.64 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Footprint" "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical"
+			(at 241.3 162.56 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Datasheet" ""
+			(at 241.3 162.56 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(property "Description" "Generic connector, single row, 01x03, script generated (kicad-library-utils/schlib/autogen/connector/)"
+			(at 241.3 162.56 0)
+			(hide yes)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+			)
+		)
+		(instances
+			(project "Datalogger"
+				(path "/2e0b602c-b1b7-453a-9022-c329951e2da5"
+					(reference "J3")
 					(unit 1)
 				)
 			)
