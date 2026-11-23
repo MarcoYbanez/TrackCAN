@@ -153,7 +153,7 @@ def main(argv):
               f"min {min(g for _, _, g in info['gaps'])} ms, max {worst} ms")
     if info.get("heartbeat_gaps_explained"):
         print(f"  heartbeat gaps: {info['heartbeat_gaps_explained']}, explained by a dropped= note")
-    if info["seqs"]:
+    if info["seqs"] and "flood_missing" in info:
         print(f"  flood: {len(info['seqs'])} frames, {info['flood_missing']} missing; rate steps: {[r for _, r in info['marks']]}")
     if info["dropped"]:
         print(f"  frames were dropped: {info['dropped'][-1]}")
