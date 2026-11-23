@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(datalogger_can, LOG_LEVEL_INF);
 #define CAN_THREAD_PERIOD_MS 5
 #define CAN_RX_QUEUE_LEN 32
 #define CAN_INIT_RETRY_MS 1000
+#define CAN_STATUS_MS 10000
 
 /*******************************************************
  * Static Variables
@@ -36,6 +37,7 @@ CAN_MSGQ_DEFINE(l_rx_msgq, CAN_RX_QUEUE_LEN);
 static tcan_t l_can;
 static struct k_spinlock l_lock;
 static uint8_t l_heartbeat_counter;
+static datalogger_can_tap_t l_tap;
 
 /*
  * PLACEHOLDER VALUES. The Defi sensor transfer curves are not known yet (see
@@ -81,7 +83,12 @@ static int port_send(const tcan_frame_t *frame)
     memcpy(zf.data, frame->data, frame->dlc);
 
     /* K_NO_WAIT plus a callback keeps this non-blocking. */
-    return can_send(l_can_dev, &zf, K_NO_WAIT, tx_done, NULL);
+    int ret = can_send(l_can_dev, &zf, K_NO_WAIT, tx_done, NULL);
+
+    if (ret == 0 && l_tap != NULL) {
+        l_tap(true, frame);
+    }
+    return ret;
 }
 
 static int port_receive(tcan_frame_t *frame)
@@ -100,6 +107,9 @@ static int port_receive(tcan_frame_t *frame)
     frame->dlc = zf.dlc;
     memset(frame->data, 0, sizeof(frame->data));
     memcpy(frame->data, zf.data, zf.dlc);
+    if (l_tap != NULL) {
+        l_tap(false, frame);
+    }
     return 1;
 }
 
@@ -126,6 +136,13 @@ static int can_bring_up(void)
         }
         filter_added = true;
     }
+#ifdef DATALOGGER_CAN_LOOPBACK
+    /* Bench only: the controller talks to itself, so no other node is needed to acknowledge frames. Allowed while stopped. */
+    ret = can_set_mode(l_can_dev, CAN_MODE_LOOPBACK);
+    if (ret < 0) {
+        return ret;
+    }
+#endif
     return can_start(l_can_dev);
 }
 
@@ -182,6 +199,8 @@ static void can_thread(void *p1, void *p2, void *p3)
     }
     LOG_INF("TrackCAN up on %s", l_can_dev->name);
 
+    uint32_t last_status_ms = k_uptime_get_32();
+
     while (1) {
         k_spinlock_key_t key = k_spin_lock(&l_lock);
 
@@ -189,6 +208,14 @@ static void can_thread(void *p1, void *p2, void *p3)
         k_spin_unlock(&l_lock, key);
 
         publish();
+        if ((uint32_t)(k_uptime_get_32() - last_status_ms) >= CAN_STATUS_MS) {
+            int state = -1;
+            unsigned tec = 0, rec = 0;
+
+            last_status_ms = k_uptime_get_32();
+            (void)datalogger_can_status(&state, &tec, &rec);
+            LOG_INF("CAN state %d (0 active, 1 warning, 2 passive, 3 bus-off) tec %u rec %u", state, tec, rec);
+        }
         k_msleep(CAN_THREAD_PERIOD_MS);
     }
 }
@@ -196,6 +223,29 @@ static void can_thread(void *p1, void *p2, void *p3)
 /*******************************************************
  * Public Function Definitions
  *******************************************************/
+int datalogger_can_status(int *state, unsigned *tx_err, unsigned *rx_err)
+{
+    enum can_state st;
+    struct can_bus_err_cnt cnt;
+    int ret;
+
+    if (!device_is_ready(l_can_dev)) {
+        return -ENODEV;
+    }
+    ret = can_get_state(l_can_dev, &st, &cnt);
+    if (ret == 0) {
+        *state = (int)st;
+        *tx_err = cnt.tx_err_cnt;
+        *rx_err = cnt.rx_err_cnt;
+    }
+    return ret;
+}
+
+void datalogger_can_set_tap(datalogger_can_tap_t tap)
+{
+    l_tap = tap;
+}
+
 void datalogger_can_set_sample(const struct datalogger_sample *sample)
 {
     k_spinlock_key_t key = k_spin_lock(&l_lock);

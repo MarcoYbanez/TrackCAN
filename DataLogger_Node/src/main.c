@@ -8,6 +8,10 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/gpio/gpio_utils.h>
 
+#ifndef DATALOGGER_NO_SD
+#include "logger/sd_logger.h"
+#endif
+
 /* GPIO */
 // #define IN_PIN DT_ALIAS(in)
 const struct gpio_dt_spec gp_pin = GPIO_DT_SPEC_GET(DT_PATH(user, out_pin), gpios);
@@ -28,6 +32,10 @@ int main(void)
 	if (bootloader_control_start() < 0) {
 		printf("USB bootloader request unavailable\n");
 	}
+#ifndef DATALOGGER_NO_SD
+	sd_logger_start(); /* the SD card logger runs in its own thread */
+#endif
+
 	struct spi_buf_set rx_channels[8] = {
 		{ .buffers =
 			  (struct spi_buf[]){
