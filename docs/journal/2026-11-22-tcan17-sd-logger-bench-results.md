@@ -14,9 +14,15 @@ Bench only: the CAN controller ran in loopback (no other node), the card is a Sa
   the heartbeat counter gap matches. The queue went from 64 to 256 records afterwards.
 - **CAN loopback**: state error-active, TEC 0, REC 0, steady about 62 lines/s.
 
+## Power cuts, measured  [verified: observed, 2 measurable cuts]
+Bench-only console time mark every 100 ms (`DATALOGGER_SD_BENCH_CUTTEST`) against the last record in the file; three cuts by unplugging USB while logging.
+- LOG0014: last record t=70,926 ms, last console mark 71,123 ms: the cut lost about **0.2 s** at most.
+- LOG0015: last record t=36,522 ms, last console mark 36,425 ms: the file was not behind the console (the console UART lags): about **0 s** lost.
+- LOG0016: not measurable (the console recording had ended); the file still ends on a complete line.
+- All three files end on a complete record, pass the checker, and a read-only `fsck_msdos -n` of the card after all three cuts was clean (exit 0).
+- The design bound is still `SYNC_MS` = 1 s; two cuts do not prove it. Treat 1 s as the limit and about 0.2 s as what was seen.
+
 ## Not verified / open
-- **How much a power cut loses.** The files end cleanly and the logger syncs every 1 s (`SYNC_MS`), but the moment of each cut is unknown, so the loss
-  window is not measured. It needs a cut at a known time (for example a relay, or a marker printed on the console just before).
 - **The "stuck card" was a card that was not fully seated  [verified: observed, 3 occurrences].** Three times the SD driver logged `Card does not
   support CMD8, assuming legacy card` after 1 s and `Card never left busy state` every 3.4 s; a 5 s and a multi-minute power cycle did not clear it,
   and it never recovered by itself in 3.5 minutes. Each time the card had just been pulled and put back by hand (first after reading it in the Mac).
@@ -30,3 +36,6 @@ Bench only: the CAN controller ran in loopback (no other node), the card is a Sa
   to settle: it needs a transceiver and a second node.
 - **1 to 2 ms timestamp jitter** appears when two threads queue frames (only the bench flood does); the checker tolerates 2 ms. In production only the CAN thread queues.
 - The real bus, real traffic and CAN errors are untested; no other node was connected.
+- **FlexCAN driver warning in loopback:** `can_mcux_flexcan: Unhandled status 0x000014c1 (result = 0x...ff)` about every 100 ms from about 6 s after boot
+  (1,468 times in 15 minutes). No frame was lost or mispaired (all loopback files pass), so it looks harmless to the data, but the cause is not understood
+  [unverified], and I did not check whether it also happens with the controller on a real bus. It floods the console; worth understanding before TCAN-11.
