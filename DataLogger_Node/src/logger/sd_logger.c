@@ -44,6 +44,9 @@ LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
 #ifndef DATALOGGER_SD_ROTATE_SECONDS
 #define DATALOGGER_SD_ROTATE_SECONDS 600
 #endif
+#ifndef DATALOGGER_SD_TEST_FAIL_ROLL
+#define DATALOGGER_SD_TEST_FAIL_ROLL 0 /* bench only: the N-th rollover fails (0 = never) */
+#endif
 #ifndef DATALOGGER_SD_ROTATE_KB
 #define DATALOGGER_SD_ROTATE_KB 30720
 #endif
@@ -165,7 +168,10 @@ static void tap(bool tx, const tcan_frame_t *f)
 #ifdef DATALOGGER_SD_BENCH_FLOOD
 /* BENCH ONLY: pushes frames straight into the logger's queue at a rising rate, to find where the SD writes start dropping them. Frame
  * 0x7F0 carries a sequence number (so a gap in the file is a lost frame); frame 0x7FF marks each rate step. The log says it is bench data. */
-#define FLOOD_STEP_MS 20000
+#ifndef DATALOGGER_SD_BENCH_FLOOD_STEP_MS
+#define DATALOGGER_SD_BENCH_FLOOD_STEP_MS 20000
+#endif
+#define FLOOD_STEP_MS DATALOGGER_SD_BENCH_FLOOD_STEP_MS
 static const uint16_t k_flood_rates[] = { 250, 500, 1000, 2000, 4000, 8000 };
 K_THREAD_STACK_DEFINE(l_flood_stack, 1024);
 static struct k_thread l_flood_thread;
@@ -329,7 +335,24 @@ static int start_file(unsigned number, const char *continues)
 	(void)snprintf(path, sizeof(path), MOUNT_POINT "/%s", name);
 
 	fs_file_t_init(&l_file);
+#if DATALOGGER_SD_TEST_FAIL_ROLL > 0
+	/* BENCH ONLY (fault injection): the N-th rollover fails to open its new file, as a full or failing card would. */
+	{
+		static unsigned l_test_rolls;
+
+		if (continues != NULL && ++l_test_rolls == DATALOGGER_SD_TEST_FAIL_ROLL)
+		{
+			LOG_WRN("TEST: failing this rollover on purpose");
+			ret = -EIO;
+		}
+		else
+		{
+			ret = fs_open(&l_file, path, FS_O_CREATE | FS_O_WRITE);
+		}
+	}
+#else
 	ret = fs_open(&l_file, path, FS_O_CREATE | FS_O_WRITE);
+#endif
 	if (ret < 0)
 	{
 		LOG_ERR("cannot create %s (%d)", path, ret);

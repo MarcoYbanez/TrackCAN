@@ -57,9 +57,13 @@ endif()
 # New log file every N seconds or N KB, whichever comes first (0 = no limit). The defaults are the real values; the bench builds shorten them.
 set(DATALOGGER_SD_ROTATE_SECONDS 600 CACHE STRING "Seconds before a new log file (0 = no limit)")
 set(DATALOGGER_SD_ROTATE_KB 30720 CACHE STRING "KB before a new log file (0 = no limit)")
+set(DATALOGGER_SD_BENCH_FLOOD_STEP_MS 20000 CACHE STRING "Bench only: how long each flood rate step lasts (ms)")
+set(DATALOGGER_SD_TEST_FAIL_ROLL 0 CACHE STRING "Bench only: the N-th rollover fails to open its file (0 = never)")
 target_compile_definitions(app PRIVATE
 	DATALOGGER_SD_ROTATE_SECONDS=${DATALOGGER_SD_ROTATE_SECONDS}
-	DATALOGGER_SD_ROTATE_KB=${DATALOGGER_SD_ROTATE_KB})
+	DATALOGGER_SD_ROTATE_KB=${DATALOGGER_SD_ROTATE_KB}
+	DATALOGGER_SD_TEST_FAIL_ROLL=${DATALOGGER_SD_TEST_FAIL_ROLL}
+	DATALOGGER_SD_BENCH_FLOOD_STEP_MS=${DATALOGGER_SD_BENCH_FLOOD_STEP_MS})
 
 if(DATALOGGER_SD)
 	target_sources(app PRIVATE
