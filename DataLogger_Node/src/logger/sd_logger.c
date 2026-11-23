@@ -32,9 +32,9 @@ LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
 #define MOUNT_POINT "/SD:"
 #define THREAD_STACK_SIZE 4096
 #define THREAD_PRIORITY 10 /* below the CAN thread (7): logging never delays the bus */
-#define QUEUE_LEN 256 /* frames queued while the file opens (about 1 s) or the card stalls */
-#define BUF_SIZE 2048
-#define WRITE_BYTES 1024
+#define QUEUE_LEN 2048 /* frames queued while the file opens (about 1 s), a file rolls over, or the card is slow: 32 KB, 0.25 s at 8000 frames/s */
+#define BUF_SIZE 16384 /* SD cards write much faster in big chunks than in 1 KB pieces */
+#define WRITE_BYTES 8192
 #define WRITE_AGE_MS 250
 #define SYNC_MS 1000 /* the most that a power cut can lose */
 #define TICK_MS 50
@@ -89,6 +89,11 @@ static uint32_t l_last_sync_ms;
 static unsigned l_number;        /* the number of the file now open */
 static logger_rotation_t l_rot;
 static uint32_t l_rolls;
+/* Timing diagnostics (cheap, always on): the slowest card write and sync and the fullest the queue got since the last report. */
+static uint32_t l_write_max_us;
+static uint32_t l_sync_max_us;
+static uint32_t l_queue_max;
+#define SLOW_MS 100 /* a single write, sync or rollover slower than this is reported at once */
 static atomic_t l_stop;                /* set by sd_logger_prepare_reboot */
 static K_SEM_DEFINE(l_stopped, 0, 1);  /* given when the file is closed */
 #define SD_STOPPED 1                   /* run_logging's return value for a deliberate stop */
@@ -211,7 +216,21 @@ static int flush_buffer(void)
 	{
 		return 0;
 	}
+	uint32_t t0 = k_cycle_get_32();
+
 	w = fs_write(&l_file, l_buf, l_len);
+	{
+		uint32_t us = k_cyc_to_us_floor32(k_cycle_get_32() - t0);
+
+		if (us > l_write_max_us)
+		{
+			l_write_max_us = us;
+		}
+		if (us > SLOW_MS * 1000u)
+		{
+			LOG_WRN("slow write: %u ms for %u bytes", (unsigned)(us / 1000u), (unsigned)l_len);
+		}
+	}
 	if (w < 0 || (size_t)w != l_len)
 	{
 		LOG_ERR("write failed (%d)", (int)w);
@@ -364,6 +383,7 @@ static int roll_file(void)
 {
 	char prev[LOGGER_FILE_NAME_LEN];
 	unsigned next;
+	uint32_t roll_start_ms = k_uptime_get_32();
 	int ret;
 
 	ret = flush_buffer();
@@ -389,6 +409,14 @@ static int roll_file(void)
 	if (ret == 0)
 	{
 		l_rolls++;
+	}
+	{
+		uint32_t ms = k_uptime_get_32() - roll_start_ms;
+
+		if (ms > SLOW_MS)
+		{
+			LOG_WRN("slow rollover: %u ms (%u frames queued meanwhile)", (unsigned)ms, (unsigned)k_msgq_num_used_get(&l_queue));
+		}
 	}
 	return ret;
 }
@@ -491,6 +519,14 @@ static int run_logging(void)
 		}
 		now = k_uptime_get_32();
 		led_update(now);
+		{
+			uint32_t used = k_msgq_num_used_get(&l_queue);
+
+			if (used > l_queue_max)
+			{
+				l_queue_max = used;
+			}
+		}
 #ifdef DATALOGGER_SD_BENCH_CUTTEST
 		/* BENCH ONLY: the console shows the uptime every 100 ms, so after a power cut the last console time minus the last record's
 		 * time in the file is how much the cut lost. */
@@ -514,6 +550,12 @@ static int run_logging(void)
 			{
 				char text[32];
 
+				LOG_WRN("dropped=%ld: queue max %u of %u, slowest write %u ms, slowest sync %u ms",
+						(long)d,
+						(unsigned)l_queue_max,
+						(unsigned)QUEUE_LEN,
+						(unsigned)(l_write_max_us / 1000u),
+						(unsigned)(l_sync_max_us / 1000u));
 				(void)snprintf(text, sizeof(text), "dropped=%ld", (long)d);
 				n = logger_format_note(line, sizeof(line), now, text);
 				if (n > 0 && ret == 0)
@@ -530,7 +572,19 @@ static int run_logging(void)
 		}
 		if (ret == 0 && logger_policy_should_sync(&l_policy, now))
 		{
+			uint32_t t0 = k_cycle_get_32();
+			uint32_t us;
+
 			ret = fs_sync(&l_file);
+			us = k_cyc_to_us_floor32(k_cycle_get_32() - t0);
+			if (us > l_sync_max_us)
+			{
+				l_sync_max_us = us;
+			}
+			if (us > SLOW_MS * 1000u)
+			{
+				LOG_WRN("slow sync: %u ms", (unsigned)(us / 1000u));
+			}
 			if (ret < 0)
 			{
 				LOG_ERR("sync failed (%d)", ret);
@@ -551,14 +605,20 @@ static int run_logging(void)
 			unsigned can_tec = 0, can_rec = 0;
 
 			(void)datalogger_can_status(&can_state, &can_tec, &can_rec);
-			LOG_INF("logged %u lines, %u bytes, %ld dropped, can state %d tec %u rec %u, last sync %u ms ago",
+			LOG_INF("logged %u lines, %u bytes, %ld dropped, can state %d tec %u rec %u, last sync %u ms ago, qmax %u, wmax %u ms, smax %u ms",
 					(unsigned)l_lines,
 					(unsigned)l_bytes,
 					(long)atomic_get(&l_dropped),
 					can_state,
 					can_tec,
 					can_rec,
-					(unsigned)(now - l_last_sync_ms));
+					(unsigned)(now - l_last_sync_ms),
+					(unsigned)l_queue_max,
+					(unsigned)(l_write_max_us / 1000u),
+					(unsigned)(l_sync_max_us / 1000u));
+			l_queue_max = 0;
+			l_write_max_us = 0;
+			l_sync_max_us = 0;
 			last_status_ms = now;
 		}
 	}
