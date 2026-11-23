@@ -32,14 +32,23 @@ LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
 #define MOUNT_POINT "/SD:"
 #define THREAD_STACK_SIZE 4096
 #define THREAD_PRIORITY 10 /* below the CAN thread (7): logging never delays the bus */
-#define QUEUE_LEN 256 /* frames queued while the file opens (about 1 s) or the card stalls */
-#define BUF_SIZE 2048
-#define WRITE_BYTES 1024
+#define QUEUE_LEN 2048 /* frames queued while the file opens (about 1 s), a file rolls over, or the card is slow: 32 KB, 0.25 s at 8000 frames/s */
+#define BUF_SIZE 16384 /* SD cards write much faster in big chunks than in 1 KB pieces */
+#define WRITE_BYTES 8192
 #define WRITE_AGE_MS 250
 #define SYNC_MS 1000 /* the most that a power cut can lose */
 #define TICK_MS 50
 #define RETRY_MS 2000
 #define STATUS_LOG_MS 10000
+/* A new file every 10 minutes or 30 MB, whichever comes first (TCAN-19). 0 = no limit. The bench builds shorten them. */
+#ifndef DATALOGGER_SD_ROTATE_SECONDS
+#define DATALOGGER_SD_ROTATE_SECONDS 600
+#endif
+#ifndef DATALOGGER_SD_ROTATE_KB
+#define DATALOGGER_SD_ROTATE_KB 30720
+#endif
+#define ROTATE_MAX_AGE_MS ((uint32_t)DATALOGGER_SD_ROTATE_SECONDS * 1000u)
+#define ROTATE_MAX_BYTES ((uint32_t)DATALOGGER_SD_ROTATE_KB * 1024u)
 
 /*******************************************************
  * Type Definitions
@@ -77,6 +86,14 @@ static atomic_t l_state = ATOMIC_INIT(SD_LOGGER_STARTING);
 static uint32_t l_lines;
 static uint32_t l_bytes;
 static uint32_t l_last_sync_ms;
+static unsigned l_number;        /* the number of the file now open */
+static logger_rotation_t l_rot;
+static uint32_t l_rolls;
+/* Timing diagnostics (cheap, always on): the slowest card write and sync and the fullest the queue got since the last report. */
+static uint32_t l_write_max_us;
+static uint32_t l_sync_max_us;
+static uint32_t l_queue_max;
+#define SLOW_MS 100 /* a single write, sync or rollover slower than this is reported at once */
 static atomic_t l_stop;                /* set by sd_logger_prepare_reboot */
 static K_SEM_DEFINE(l_stopped, 0, 1);  /* given when the file is closed */
 #define SD_STOPPED 1                   /* run_logging's return value for a deliberate stop */
@@ -199,13 +216,28 @@ static int flush_buffer(void)
 	{
 		return 0;
 	}
+	uint32_t t0 = k_cycle_get_32();
+
 	w = fs_write(&l_file, l_buf, l_len);
+	{
+		uint32_t us = k_cyc_to_us_floor32(k_cycle_get_32() - t0);
+
+		if (us > l_write_max_us)
+		{
+			l_write_max_us = us;
+		}
+		if (us > SLOW_MS * 1000u)
+		{
+			LOG_WRN("slow write: %u ms for %u bytes", (unsigned)(us / 1000u), (unsigned)l_len);
+		}
+	}
 	if (w < 0 || (size_t)w != l_len)
 	{
 		LOG_ERR("write failed (%d)", (int)w);
 		return w < 0 ? (int)w : -EIO;
 	}
 	l_bytes += (uint32_t)l_len;
+	logger_rotation_wrote(&l_rot, (uint32_t)l_len);
 	l_len = 0;
 	logger_policy_written(&l_policy);
 	return 0;
@@ -278,13 +310,121 @@ static void log_card_identity(void)
 			(unsigned)(count / 2048u), oem, sector[510], sector[511], sector[0], sector[1], sector[2]);
 }
 
-/* Mounts the card and opens a new log file with the header written. Returns 0, or sets the state and returns an error. */
-static int open_log(void)
+/* Creates LOGnnnn.CSV, writes the header (and, for a rollover, a NOTE naming the file it continues) and syncs. On failure the file is
+ * closed, the state is FS_ERROR and the negative error is returned; the caller unmounts. */
+static int start_file(unsigned number, const char *continues)
 {
 	char name[LOGGER_FILE_NAME_LEN];
 	char path[sizeof(MOUNT_POINT) + LOGGER_FILE_NAME_LEN + 1];
-	unsigned number;
+	char line[LOGGER_LINE_MAX];
 	const char *header;
+	size_t n;
+	int ret;
+
+	if (logger_file_name(name, sizeof(name), number) != 0)
+	{
+		set_state(SD_LOGGER_FS_ERROR);
+		return -EINVAL;
+	}
+	(void)snprintf(path, sizeof(path), MOUNT_POINT "/%s", name);
+
+	fs_file_t_init(&l_file);
+	ret = fs_open(&l_file, path, FS_O_CREATE | FS_O_WRITE);
+	if (ret < 0)
+	{
+		LOG_ERR("cannot create %s (%d)", path, ret);
+		set_state(SD_LOGGER_FS_ERROR);
+		return ret;
+	}
+	l_len = 0;
+	l_lines = 0;
+	l_bytes = 0;
+	l_number = number;
+	logger_policy_init(&l_policy, WRITE_BYTES, WRITE_AGE_MS, SYNC_MS, k_uptime_get_32());
+	logger_rotation_start(&l_rot, ROTATE_MAX_BYTES, ROTATE_MAX_AGE_MS, k_uptime_get_32());
+
+	header = logger_csv_header();
+	ret = append(header, strlen(header), k_uptime_get_32());
+	if (ret == 0 && continues != NULL)
+	{
+		char text[40];
+
+		(void)snprintf(text, sizeof(text), "continues=%s", continues);
+		n = logger_format_note(line, sizeof(line), k_uptime_get_32(), text);
+		ret = n > 0 ? append(line, n, k_uptime_get_32()) : -EINVAL;
+	}
+#if defined(DATALOGGER_CAN_LOOPBACK) || defined(DATALOGGER_SD_BENCH_FLOOD)
+	/* Bench data must never pass for car data (the same rule as the dash's DEMO flag): every file says so, not only the first. */
+	if (ret == 0)
+	{
+		n = logger_format_note(line, sizeof(line), k_uptime_get_32(), "mode=loopback bench data");
+		ret = n > 0 ? append(line, n, k_uptime_get_32()) : -EINVAL;
+	}
+#endif
+	if (ret < 0 || flush_buffer() < 0 || fs_sync(&l_file) < 0)
+	{
+		LOG_ERR("cannot write the header of %s", path);
+		(void)fs_close(&l_file);
+		fs_file_t_init(&l_file);
+		set_state(SD_LOGGER_FS_ERROR);
+		return -EIO;
+	}
+	logger_policy_synced(&l_policy, k_uptime_get_32());
+	l_last_sync_ms = k_uptime_get_32();
+	LOG_INF("logging to %s", path);
+	set_state(SD_LOGGER_LOGGING);
+	return 0;
+}
+
+/* Rotation: close the current file cleanly and continue in the next number. Frames that arrive meanwhile wait in the queue. Returns 0 or
+ * a negative error (the caller then stops logging and the thread starts over, which rescans the card). Never overwrites: the next number
+ * is one above the current file's, and 0 (9999 used) stops logging. */
+static int roll_file(void)
+{
+	char prev[LOGGER_FILE_NAME_LEN];
+	unsigned next;
+	uint32_t roll_start_ms = k_uptime_get_32();
+	int ret;
+
+	ret = flush_buffer();
+	if (ret == 0)
+	{
+		ret = fs_sync(&l_file);
+	}
+	if (ret < 0)
+	{
+		return ret;
+	}
+	(void)logger_file_name(prev, sizeof(prev), l_number);
+	(void)fs_close(&l_file);
+	fs_file_t_init(&l_file);
+	next = logger_next_number(l_number);
+	if (next == 0)
+	{
+		LOG_ERR("no free log number: stopped rather than overwriting");
+		set_state(SD_LOGGER_FS_ERROR);
+		return -ENOSPC;
+	}
+	ret = start_file(next, prev);
+	if (ret == 0)
+	{
+		l_rolls++;
+	}
+	{
+		uint32_t ms = k_uptime_get_32() - roll_start_ms;
+
+		if (ms > SLOW_MS)
+		{
+			LOG_WRN("slow rollover: %u ms (%u frames queued meanwhile)", (unsigned)ms, (unsigned)k_msgq_num_used_get(&l_queue));
+		}
+	}
+	return ret;
+}
+
+/* Mounts the card and opens a new log file with the header written. Returns 0, or sets the state and returns an error. */
+static int open_log(void)
+{
+	unsigned number;
 	int ret;
 
 	ret = disk_access_ioctl(DISK_NAME, DISK_IOCTL_CTRL_INIT, NULL);
@@ -304,41 +444,19 @@ static int open_log(void)
 		return ret;
 	}
 	ret = next_log_number(&number);
-	if (ret < 0 || number == 0 || logger_file_name(name, sizeof(name), number) != 0)
+	if (ret < 0 || number == 0)
 	{
 		LOG_ERR("no free log number (%d): nothing is written rather than overwriting", ret);
 		(void)fs_unmount(&l_mount);
 		set_state(SD_LOGGER_FS_ERROR);
 		return ret < 0 ? ret : -ENOSPC;
 	}
-	(void)snprintf(path, sizeof(path), MOUNT_POINT "/%s", name);
-
-	fs_file_t_init(&l_file);
-	ret = fs_open(&l_file, path, FS_O_CREATE | FS_O_WRITE);
+	ret = start_file(number, NULL);
 	if (ret < 0)
 	{
-		LOG_ERR("cannot create %s (%d)", path, ret);
 		(void)fs_unmount(&l_mount);
-		set_state(SD_LOGGER_FS_ERROR);
 		return ret;
 	}
-	l_len = 0;
-	l_lines = 0;
-	l_bytes = 0;
-	logger_policy_init(&l_policy, WRITE_BYTES, WRITE_AGE_MS, SYNC_MS, k_uptime_get_32());
-
-	header = logger_csv_header();
-	if (append(header, strlen(header), k_uptime_get_32()) < 0 || flush_buffer() < 0 || fs_sync(&l_file) < 0)
-	{
-		LOG_ERR("cannot write the header of %s", path);
-		(void)fs_close(&l_file);
-		(void)fs_unmount(&l_mount);
-		set_state(SD_LOGGER_FS_ERROR);
-		return -EIO;
-	}
-	logger_policy_synced(&l_policy, k_uptime_get_32());
-	LOG_INF("logging to %s", path);
-	set_state(SD_LOGGER_LOGGING);
 	return 0;
 }
 
@@ -361,14 +479,6 @@ static int run_logging(void)
 
 	n = logger_format_note(line, sizeof(line), last_note_ms, "start");
 	ret = n > 0 ? append(line, n, last_note_ms) : 0;
-#if defined(DATALOGGER_CAN_LOOPBACK) || defined(DATALOGGER_SD_BENCH_FLOOD)
-	/* Bench data must never pass for car data (the same rule as the dash's DEMO flag). */
-	n = logger_format_note(line, sizeof(line), last_note_ms, "mode=loopback bench data");
-	if (ret == 0 && n > 0)
-	{
-		ret = append(line, n, last_note_ms);
-	}
-#endif
 
 	while (ret == 0)
 	{
@@ -409,6 +519,14 @@ static int run_logging(void)
 		}
 		now = k_uptime_get_32();
 		led_update(now);
+		{
+			uint32_t used = k_msgq_num_used_get(&l_queue);
+
+			if (used > l_queue_max)
+			{
+				l_queue_max = used;
+			}
+		}
 #ifdef DATALOGGER_SD_BENCH_CUTTEST
 		/* BENCH ONLY: the console shows the uptime every 100 ms, so after a power cut the last console time minus the last record's
 		 * time in the file is how much the cut lost. */
@@ -432,6 +550,12 @@ static int run_logging(void)
 			{
 				char text[32];
 
+				LOG_WRN("dropped=%ld: queue max %u of %u, slowest write %u ms, slowest sync %u ms",
+						(long)d,
+						(unsigned)l_queue_max,
+						(unsigned)QUEUE_LEN,
+						(unsigned)(l_write_max_us / 1000u),
+						(unsigned)(l_sync_max_us / 1000u));
 				(void)snprintf(text, sizeof(text), "dropped=%ld", (long)d);
 				n = logger_format_note(line, sizeof(line), now, text);
 				if (n > 0 && ret == 0)
@@ -448,7 +572,19 @@ static int run_logging(void)
 		}
 		if (ret == 0 && logger_policy_should_sync(&l_policy, now))
 		{
+			uint32_t t0 = k_cycle_get_32();
+			uint32_t us;
+
 			ret = fs_sync(&l_file);
+			us = k_cyc_to_us_floor32(k_cycle_get_32() - t0);
+			if (us > l_sync_max_us)
+			{
+				l_sync_max_us = us;
+			}
+			if (us > SLOW_MS * 1000u)
+			{
+				LOG_WRN("slow sync: %u ms", (unsigned)(us / 1000u));
+			}
 			if (ret < 0)
 			{
 				LOG_ERR("sync failed (%d)", ret);
@@ -459,20 +595,30 @@ static int run_logging(void)
 				l_last_sync_ms = now;
 			}
 		}
+		if (ret == 0 && logger_rotation_due(&l_rot, now))
+		{
+			ret = roll_file();
+		}
 		if ((uint32_t)(now - last_status_ms) >= STATUS_LOG_MS)
 		{
 			int can_state = -1;
 			unsigned can_tec = 0, can_rec = 0;
 
 			(void)datalogger_can_status(&can_state, &can_tec, &can_rec);
-			LOG_INF("logged %u lines, %u bytes, %ld dropped, can state %d tec %u rec %u, last sync %u ms ago",
+			LOG_INF("logged %u lines, %u bytes, %ld dropped, can state %d tec %u rec %u, last sync %u ms ago, qmax %u, wmax %u ms, smax %u ms",
 					(unsigned)l_lines,
 					(unsigned)l_bytes,
 					(long)atomic_get(&l_dropped),
 					can_state,
 					can_tec,
 					can_rec,
-					(unsigned)(now - l_last_sync_ms));
+					(unsigned)(now - l_last_sync_ms),
+					(unsigned)l_queue_max,
+					(unsigned)(l_write_max_us / 1000u),
+					(unsigned)(l_sync_max_us / 1000u));
+			l_queue_max = 0;
+			l_write_max_us = 0;
+			l_sync_max_us = 0;
 			last_status_ms = now;
 		}
 	}

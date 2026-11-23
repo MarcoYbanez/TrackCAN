@@ -23,11 +23,16 @@ def good_log():
 
 
 def run(lines, loopback=True):
+    """lines: one file's lines, or a list of (file name, lines) for a rotated log."""
+    files = [("LOG0001.CSV", lines)] if lines and isinstance(lines[0], str) else lines
     with tempfile.TemporaryDirectory() as d:
-        p = os.path.join(d, "LOG0001.CSV")
-        with open(p, "w") as f:
-            f.write("\n".join(lines) + "\n")
-        args = [sys.executable, "-I", CHECKER, p] + (["--loopback"] if loopback else [])
+        paths = []
+        for name, content in files:
+            p = os.path.join(d, name)
+            with open(p, "w") as f:
+                f.write("\n".join(content) + "\n")
+            paths.append(p)
+        args = [sys.executable, "-I", CHECKER] + paths + (["--loopback"] if loopback else [])
         return subprocess.run(args, capture_output=True, text=True).returncode
 
 
@@ -41,7 +46,40 @@ def drop(l, idx):
     return [x for i, x in enumerate(l) if i not in idx]
 
 
+def chain(first_beats=range(0, 10), second_beats=range(10, 20), t2=520, second_name="LOG0002.CSV", note2="continues=LOG0001.CSV",
+          loop2="1,NOTE,,,mode=loopback bench data"):
+    """Two rotated files: heartbeat counters 0..9 then 10..19, 50 ms apart."""
+    a = ["t_ms,dir,id,dlc,data", "1,NOTE,,,start", "1,NOTE,,,mode=loopback bench data"]
+    t = 10
+    for c in first_beats:
+        a += [f"{t},TX,702,2,00{c:02X}", f"{t},RX,702,2,00{c:02X}"]
+        t += 50
+    b = ["t_ms,dir,id,dlc,data", f"{t2},NOTE,,,{note2}" if note2 else "1,NOTE,,,start"] + ([loop2] if loop2 else [])
+    t = t2
+    for c in second_beats:
+        b += [f"{t},TX,702,2,00{c:02X}", f"{t},RX,702,2,00{c:02X}"]
+        t += 50
+    return [("LOG0001.CSV", a), (second_name, b)]
+
+
+def flood_chain(seq_break):
+    """Two rotated flood files; the second starts at sequence 5 or, with seq_break, at 9."""
+    a = ["t_ms,dir,id,dlc,data", "1,NOTE,,,start", "1,NOTE,,,mode=loopback bench data"] + [f"{10 + i},TX,7F0,4,0000000{i}" for i in range(5)]
+    b = ["t_ms,dir,id,dlc,data", "20,NOTE,,,continues=LOG0001.CSV", "20,NOTE,,,mode=loopback bench data"]
+    b += [f"{20 + i},TX,7F0,4,0000000{(9 if seq_break else 5) + i}" for i in range(5)]
+    return [("LOG0001.CSV", a), ("LOG0002.CSV", b)]
+
+
 CASES = [  # (name, lines, expected exit code: 0 pass, 1 fail)
+    ("rotated log: two files in order", chain(), 0),
+    ("rotated log: next file is not number+1", chain(second_name="LOG0003.CSV"), 1),
+    ("rotated log: no continues= note", chain(note2=None), 1),
+    ("rotated log: continues= names the wrong file", chain(note2="continues=LOG0007.CSV"), 1),
+    ("rotated log: time restarts at the boundary", chain(t2=100), 1),
+    ("rotated log: heartbeat skips at the boundary, silent", chain(second_beats=range(12, 22)), 1),
+    ("rotated log: second file lacks the bench label", chain(loop2=None), 1),
+    ("rotated flood: sequence continues", flood_chain(False), 0),
+    ("rotated flood: sequence gap at the boundary, silent", flood_chain(True), 1),
     ("good log", good_log(), 0),
     ("bad header", ["t,dir,id,dlc,data"] + good_log()[1:], 1),
     ("cut-short last line", good_log() + ["1010,TX,702,2,00"], 1),

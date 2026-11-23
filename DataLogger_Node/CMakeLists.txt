@@ -53,6 +53,13 @@ if(DATALOGGER_SD_BENCH_FLOOD)
 	target_compile_definitions(app PRIVATE DATALOGGER_SD_BENCH_FLOOD=1)
 endif()
 
+# New log file every N seconds or N KB, whichever comes first (0 = no limit). The defaults are the real values; the bench builds shorten them.
+set(DATALOGGER_SD_ROTATE_SECONDS 600 CACHE STRING "Seconds before a new log file (0 = no limit)")
+set(DATALOGGER_SD_ROTATE_KB 30720 CACHE STRING "KB before a new log file (0 = no limit)")
+target_compile_definitions(app PRIVATE
+	DATALOGGER_SD_ROTATE_SECONDS=${DATALOGGER_SD_ROTATE_SECONDS}
+	DATALOGGER_SD_ROTATE_KB=${DATALOGGER_SD_ROTATE_KB})
+
 if(DATALOGGER_SD)
 	target_sources(app PRIVATE
 		src/logger/logger_core.c

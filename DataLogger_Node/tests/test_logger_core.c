@@ -205,6 +205,65 @@ static void test_policy(void)
 	CHECK(logger_policy_should_sync(&p, 0x00000010u));  /* 1040 ms, the counter has wrapped */
 }
 
+static void test_rotation(void)
+{
+	logger_rotation_t r;
+
+	/* Size: due exactly at the limit, not before. */
+	logger_rotation_start(&r, 1000, 0, 5000);
+	CHECK(!logger_rotation_due(&r, 5000));
+	logger_rotation_wrote(&r, 999);
+	CHECK(!logger_rotation_due(&r, 5000));
+	logger_rotation_wrote(&r, 1);
+	CHECK(logger_rotation_due(&r, 5000)); /* 1000 of 1000 */
+	logger_rotation_wrote(&r, 500);
+	CHECK(logger_rotation_due(&r, 5000)); /* over the limit stays due */
+
+	/* Age: due exactly at the limit, not before. */
+	logger_rotation_start(&r, 0, 600000, 1000);
+	CHECK(!logger_rotation_due(&r, 1000));
+	CHECK(!logger_rotation_due(&r, 600999)); /* 599999 ms */
+	CHECK(logger_rotation_due(&r, 601000));	 /* 600000 ms */
+	logger_rotation_wrote(&r, 4000000000u);
+	CHECK(!logger_rotation_due(&r, 1500)); /* no size limit: bytes alone never trigger */
+
+	/* Whichever comes first. */
+	logger_rotation_start(&r, 1000, 600000, 0);
+	CHECK(!logger_rotation_due(&r, 599999));
+	logger_rotation_wrote(&r, 1000);
+	CHECK(logger_rotation_due(&r, 10)); /* size first */
+	logger_rotation_start(&r, 1000, 600000, 0);
+	logger_rotation_wrote(&r, 10);
+	CHECK(logger_rotation_due(&r, 600000)); /* age first */
+
+	/* Both limits 0: never due. */
+	logger_rotation_start(&r, 0, 0, 0);
+	logger_rotation_wrote(&r, 4000000000u);
+	CHECK(!logger_rotation_due(&r, 0xFFFFFFFFu));
+
+	/* Starting again clears the byte count and moves the opening time. */
+	logger_rotation_start(&r, 1000, 600000, 1000);
+	logger_rotation_wrote(&r, 1000);
+	CHECK(logger_rotation_due(&r, 1000));
+	logger_rotation_start(&r, 1000, 600000, 2000);
+	CHECK(!logger_rotation_due(&r, 2000));
+	CHECK(!logger_rotation_due(&r, 2000 + 599999));
+	CHECK(logger_rotation_due(&r, 2000 + 600000));
+
+	/* The byte count saturates instead of wrapping to a small number. */
+	logger_rotation_start(&r, 1000, 0, 0);
+	logger_rotation_wrote(&r, 0xFFFFFFF0u);
+	logger_rotation_wrote(&r, 0x20u);
+	CHECK(r.bytes == 0xFFFFFFFFu);
+	CHECK(logger_rotation_due(&r, 0));
+
+	/* The millisecond counter wraps: only ONE side of a naive "now >= opened + age" comparison wraps here. */
+	logger_rotation_start(&r, 0, 1000, 0xFFFFFE00u); /* opened 0x200 ms before the wrap */
+	CHECK(!logger_rotation_due(&r, 0xFFFFFFFFu));	  /* 511 ms */
+	CHECK(!logger_rotation_due(&r, 0x000001E7u));	  /* 999 ms: the counter has wrapped */
+	CHECK(logger_rotation_due(&r, 0x000001E8u));	  /* 1000 ms */
+}
+
 /*******************************************************
  * Public Function Definitions
  *******************************************************/
@@ -217,6 +276,7 @@ int main(void)
 	test_next_file_number();
 	test_directory_scan_one_entry_at_a_time();
 	test_policy();
+	test_rotation();
 
 	printf("%d checks, %d failures\n", l_checks, l_failures);
 	return l_failures == 0 ? 0 : 1;
