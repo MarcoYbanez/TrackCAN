@@ -12,6 +12,7 @@
 #define SD_LOGGER_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /*******************************************************
@@ -39,8 +40,14 @@ void sd_logger_start(void);
 
 sd_logger_state_t sd_logger_state(void);
 
-/* The number of the LOGnnnn.CSV being written now, or 0 when no file is open. Other readers (the USB copy, TCAN-21) must not serve it. */
-unsigned sd_logger_open_number(void);
+/* The name of the file being written now ("D0000007.CSV" or "M0000007.CSV"), or false when none is open. Other readers (the USB copy, TCAN-21)
+ * must not serve it. */
+bool sd_logger_open_file(char *name, size_t size);
+
+/* The USB copy holds this while it reads a file, so the ring's deletion never runs under a reader (it skips and tries at the next rollover). */
+void sd_logger_serving_lock(void);
+void sd_logger_serving_unlock(void);
+
 
 /*
  * Before a deliberate reboot (TCAN-18): drains the queue, writes the buffer, syncs and closes the file, and stops the logger for good.

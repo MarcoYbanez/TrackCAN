@@ -89,15 +89,34 @@ static void test_parse(void)
 	r = xfer_parse("LIST");
 	CHECK(r.cmd == XFER_CMD_LIST);
 	r = xfer_parse("GET LOG0005.CSV");
-	CHECK(r.cmd == XFER_CMD_GET && r.number == 5u);
+	CHECK(r.cmd == XFER_CMD_GET && strcmp(r.name, "LOG0005.CSV") == 0);
 	r = xfer_parse("GET LOG9999.CSV");
-	CHECK(r.cmd == XFER_CMD_GET && r.number == 9999u);
+	CHECK(r.cmd == XFER_CMD_GET && strcmp(r.name, "LOG9999.CSV") == 0);
 	r = xfer_parse("GET LOG0001.CSV");
-	CHECK(r.cmd == XFER_CMD_GET && r.number == 1u);
+	CHECK(r.cmd == XFER_CMD_GET && strcmp(r.name, "LOG0001.CSV") == 0);
 	r = xfer_parse("get log0042.csv"); /* "GET" must be upper case, the name may be any case */
 	CHECK(r.cmd == XFER_CMD_BAD);
 	r = xfer_parse("GET log0042.csv");
-	CHECK(r.cmd == XFER_CMD_GET && r.number == 42u);
+	CHECK(r.cmd == XFER_CMD_GET && strcmp(r.name, "LOG0042.CSV") == 0); /* the name is returned in upper case */
+
+	/* The daily and high-res families (TCAN-20): a letter and 7 digits. */
+	r = xfer_parse("GET D0000007.CSV");
+	CHECK(r.cmd == XFER_CMD_GET && strcmp(r.name, "D0000007.CSV") == 0);
+	r = xfer_parse("GET M9999999.CSV");
+	CHECK(r.cmd == XFER_CMD_GET && strcmp(r.name, "M9999999.CSV") == 0);
+	r = xfer_parse("GET m0000001.csv");
+	CHECK(r.cmd == XFER_CMD_GET && strcmp(r.name, "M0000001.CSV") == 0);
+	CHECK(xfer_parse("GET D0000000.CSV").cmd == XFER_CMD_BAD); /* number 0 */
+	CHECK(xfer_parse("GET D000007.CSV").cmd == XFER_CMD_BAD);	 /* 6 digits */
+	CHECK(xfer_parse("GET D00000007.CSV").cmd == XFER_CMD_BAD); /* 8 digits */
+	CHECK(xfer_parse("GET D0005.CSV").cmd == XFER_CMD_BAD);	 /* a daily name needs 7 digits */
+	CHECK(xfer_parse("GET LOG0000005.CSV").cmd == XFER_CMD_BAD); /* a LOG name needs 4 */
+	CHECK(xfer_parse("GET X0000007.CSV").cmd == XFER_CMD_BAD); /* no such family */
+	CHECK(xfer_parse("GET D0000007.CSVX").cmd == XFER_CMD_BAD);
+	CHECK(xfer_parse("GET D0000007.TXT").cmd == XFER_CMD_BAD);
+	CHECK(xfer_parse("GET D00000A7.CSV").cmd == XFER_CMD_BAD);
+	CHECK(xfer_parse("GET D0000007CSV").cmd == XFER_CMD_BAD);
+	CHECK(xfer_parse("GET ../0000007.CSV").cmd == XFER_CMD_BAD);
 
 	/* Everything else is refused, and above all nothing that looks like a path. */
 	CHECK(xfer_parse("").cmd == XFER_CMD_BAD);
@@ -125,6 +144,30 @@ static void test_parse(void)
 	CHECK(xfer_parse("PUT LOG0005.CSV").cmd == XFER_CMD_BAD);
 }
 
+static void test_name_valid(void)
+{
+	char out[XFER_NAME_MAX];
+
+	CHECK(xfer_name_valid("LOG0005.CSV", out) && strcmp(out, "LOG0005.CSV") == 0);
+	CHECK(xfer_name_valid("log0005.csv", out) && strcmp(out, "LOG0005.CSV") == 0);
+	CHECK(xfer_name_valid("D0000007.CSV", out) && strcmp(out, "D0000007.CSV") == 0);
+	CHECK(xfer_name_valid("m0000007.csv", out) && strcmp(out, "M0000007.CSV") == 0);
+	CHECK(!xfer_name_valid("", out));
+	CHECK(!xfer_name_valid("LOG0000.CSV", out));
+	CHECK(!xfer_name_valid("D0000000.CSV", out));
+	CHECK(!xfer_name_valid("._LOG0001.CSV", out)); /* the Mac's hidden files on the card */
+	CHECK(!xfer_name_valid("LOG0005.CSV ", out));
+	CHECK(!xfer_name_valid("NOTES.TXT", out));
+	CHECK(!xfer_name_valid("D0000007.CS", out));
+	/* The right length with one wrong character where the dot or the extension belongs. */
+	CHECK(!xfer_name_valid("D0000007XCSV", out));
+	CHECK(!xfer_name_valid("LOG0005XCSV", out));
+	CHECK(!xfer_name_valid("D0000007.XSV", out));
+	CHECK(!xfer_name_valid("D0000007.CXV", out));
+	CHECK(!xfer_name_valid("D0000007.CSX", out));
+	CHECK(!xfer_name_valid("LOG0005.CSX", out));
+}
+
 static void test_line_assembly(void)
 {
 	xfer_line_t l;
@@ -134,7 +177,7 @@ static void test_line_assembly(void)
 	CHECK(feed(&l, "LIST\n", &r) == 1 && r.cmd == XFER_CMD_LIST);
 	CHECK(feed(&l, "LIST\r\n", &r) == 1 && r.cmd == XFER_CMD_LIST); /* CR LF is one request, not two */
 	CHECK(feed(&l, "\n\n\r\n", &r) == 0);							/* empty lines are ignored */
-	CHECK(feed(&l, "GET LOG0007.CSV\r", &r) == 1 && r.cmd == XFER_CMD_GET && r.number == 7u);
+	CHECK(feed(&l, "GET LOG0007.CSV\r", &r) == 1 && r.cmd == XFER_CMD_GET && strcmp(r.name, "LOG0007.CSV") == 0);
 	CHECK(feed(&l, "LIST", &r) == 0);								/* not complete until a line ending */
 	CHECK(feed(&l, "\n", &r) == 1 && r.cmd == XFER_CMD_LIST);
 	CHECK(feed(&l, "LIST\nLIST\n", &r) == 2);						/* two commands in one burst */
@@ -171,9 +214,10 @@ static void test_replies(void)
 {
 	char b[48];
 
-	CHECK(xfer_format_list_entry(b, sizeof(b), 5, 1234567u) == 20u && strcmp(b, "LOG0005.CSV 1234567\n") == 0);
-	CHECK(xfer_format_list_entry(b, sizeof(b), 9999, 0) == 14u && strcmp(b, "LOG9999.CSV 0\n") == 0);
-	CHECK(xfer_format_list_entry(b, sizeof(b), 12, 4294967295u) == 23u && strcmp(b, "LOG0012.CSV 4294967295\n") == 0);
+	CHECK(xfer_format_list_entry(b, sizeof(b), "LOG0005.CSV", 1234567u) == 20u && strcmp(b, "LOG0005.CSV 1234567\n") == 0);
+	CHECK(xfer_format_list_entry(b, sizeof(b), "D0000007.CSV", 42u) == 16u && strcmp(b, "D0000007.CSV 42\n") == 0);
+	CHECK(xfer_format_list_entry(b, sizeof(b), "LOG9999.CSV", 0) == 14u && strcmp(b, "LOG9999.CSV 0\n") == 0);
+	CHECK(xfer_format_list_entry(b, sizeof(b), "M0000012.CSV", 4294967295u) == 24u && strcmp(b, "M0000012.CSV 4294967295\n") == 0);
 	CHECK(xfer_format_end(b, sizeof(b)) == 4u && strcmp(b, "END\n") == 0);
 	CHECK(xfer_format_ok(b, sizeof(b), 1234567u) == 11u && strcmp(b, "OK 1234567\n") == 0);
 	CHECK(xfer_format_crc(b, sizeof(b), 0x1A2B3C4Du) == 13u && strcmp(b, "CRC 1a2b3c4d\n") == 0);
@@ -194,6 +238,7 @@ int main(void)
 {
 	test_crc32();
 	test_parse();
+	test_name_valid();
 	test_line_assembly();
 	test_replies();
 

@@ -22,6 +22,7 @@ target_sources(app PRIVATE
 	src/main.c
 	src/bootloader/bootloader_control.c
 	src/bootloader/bootloader_request.c
+	src/logger/logger_segments.c
 )
 if(DATALOGGER_CAN)
 	target_sources(app PRIVATE
@@ -59,11 +60,27 @@ set(DATALOGGER_SD_ROTATE_SECONDS 600 CACHE STRING "Seconds before a new log file
 set(DATALOGGER_SD_ROTATE_KB 30720 CACHE STRING "KB before a new log file (0 = no limit)")
 set(DATALOGGER_SD_BENCH_FLOOD_STEP_MS 20000 CACHE STRING "Bench only: how long each flood rate step lasts (ms)")
 set(DATALOGGER_SD_TEST_FAIL_ROLL 0 CACHE STRING "Bench only: the N-th rollover fails to open its file (0 = never)")
+# Daily and high-res logging (TCAN-20): each family's ring space, the high-res time limit, and the daily rotation. START_MANUAL is a bench setting.
+set(DATALOGGER_SD_DAILY_QUOTA_MB 4096 CACHE STRING "Space the daily files may use before the oldest is deleted (MB)")
+set(DATALOGGER_SD_MANUAL_QUOTA_MB 8192 CACHE STRING "Space the high-res files may use before the oldest is deleted (MB)")
+set(DATALOGGER_SD_MANUAL_MAX_SECONDS 600 CACHE STRING "High-res logging stops by itself after this long (0 = never)")
+set(DATALOGGER_SD_DAILY_ROTATE_SECONDS 3600 CACHE STRING "Seconds before a new daily file")
+set(DATALOGGER_SD_START_MANUAL 0 CACHE STRING "Bench only: start in high-res mode (1)")
 target_compile_definitions(app PRIVATE
 	DATALOGGER_SD_ROTATE_SECONDS=${DATALOGGER_SD_ROTATE_SECONDS}
 	DATALOGGER_SD_ROTATE_KB=${DATALOGGER_SD_ROTATE_KB}
 	DATALOGGER_SD_TEST_FAIL_ROLL=${DATALOGGER_SD_TEST_FAIL_ROLL}
-	DATALOGGER_SD_BENCH_FLOOD_STEP_MS=${DATALOGGER_SD_BENCH_FLOOD_STEP_MS})
+	DATALOGGER_SD_BENCH_FLOOD_STEP_MS=${DATALOGGER_SD_BENCH_FLOOD_STEP_MS}
+	DATALOGGER_SD_DAILY_QUOTA_MB=${DATALOGGER_SD_DAILY_QUOTA_MB}
+	DATALOGGER_SD_MANUAL_QUOTA_MB=${DATALOGGER_SD_MANUAL_QUOTA_MB}
+	DATALOGGER_SD_MANUAL_MAX_SECONDS=${DATALOGGER_SD_MANUAL_MAX_SECONDS}
+	DATALOGGER_SD_DAILY_ROTATE_SECONDS=${DATALOGGER_SD_DAILY_ROTATE_SECONDS}
+	DATALOGGER_SD_START_MANUAL=${DATALOGGER_SD_START_MANUAL})
+# Bench only: a button played on the bus (needs the CAN loopback).
+option(DATALOGGER_CAN_BENCH_BUTTON "Play a logging button on the bus (bench, needs loopback)" OFF)
+if(DATALOGGER_CAN_BENCH_BUTTON)
+	target_compile_definitions(app PRIVATE DATALOGGER_CAN_BENCH_BUTTON=1)
+endif()
 
 if(DATALOGGER_SD)
 	target_sources(app PRIVATE

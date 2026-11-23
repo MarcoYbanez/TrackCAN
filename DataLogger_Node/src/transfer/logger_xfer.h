@@ -5,7 +5,7 @@
  *
  * Host -> Node, one command per line (CR or LF ends it):
  *     LIST                  the closed log files
- *     GET LOG0005.CSV       one closed log file
+ *     GET LOG0005.CSV       one closed log file (also D0000007.CSV daily and M0000007.CSV high-res files, TCAN-20)
  * Node -> host:
  *     LIST:   one "LOG0005.CSV 1234567" line per file (name, size in bytes), then "END"
  *     GET:    "OK 1234567", exactly that many raw bytes, then "CRC 1a2b3c4d" (CRC-32 of the bytes, the same as zlib.crc32)
@@ -26,7 +26,8 @@
 /*******************************************************
  * Macros
  *******************************************************/
-#define XFER_LINE_MAX 32u /* the longest command is "GET LOG0005.CSV" (15 characters) */
+#define XFER_LINE_MAX 32u /* the longest command is "GET D0000007.CSV" (16 characters) */
+#define XFER_NAME_MAX 13u /* "D0000007.CSV" and the NUL */
 
 /*******************************************************
  * Type Definitions
@@ -41,7 +42,7 @@ typedef enum
 typedef struct
 {
 	xfer_cmd_t cmd;
-	unsigned number; /* GET: the file number 1..9999 */
+	char name[XFER_NAME_MAX]; /* GET: the validated file name, upper case */
 } xfer_request_t;
 
 /* Collects bytes into lines. Bytes beyond XFER_LINE_MAX are dropped, and because no valid command is that long the line is then reported
@@ -64,11 +65,15 @@ void xfer_line_init(xfer_line_t *l);
  */
 bool xfer_line_push(xfer_line_t *l, uint8_t byte, xfer_request_t *out);
 
-/* Parses one line (no line ending). "LIST" and "GET LOGnnnn.CSV" (exactly 4 digits, 1..9999, upper or lower case) are the only commands. */
+/* True, and the upper-case name in out, when name is exactly LOGnnnn.CSV (4 digits, 1..9999) or Dnnnnnnn.CSV / Mnnnnnnn.CSV (7 digits,
+ * 1..9999999), any case. Nothing else: no paths, no other files. */
+bool xfer_name_valid(const char *name, char out[XFER_NAME_MAX]);
+
+/* Parses one line (no line ending). "LIST" and "GET <valid name>" (see xfer_name_valid) are the only commands. */
 xfer_request_t xfer_parse(const char *line);
 
 /* Replies, each ending in a newline. Return the length, or 0 if it does not fit in `size` (the buffer then holds an empty string). */
-size_t xfer_format_list_entry(char *buf, size_t size, unsigned number, uint32_t bytes);
+size_t xfer_format_list_entry(char *buf, size_t size, const char *name, uint32_t bytes);
 size_t xfer_format_end(char *buf, size_t size);
 size_t xfer_format_ok(char *buf, size_t size, uint32_t bytes);
 size_t xfer_format_crc(char *buf, size_t size, uint32_t crc);

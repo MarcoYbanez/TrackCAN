@@ -23,7 +23,7 @@ import zlib
 
 BAUD = termios.B115200  # ignored by a USB serial port, but it must NOT be 134
 TIMEOUT_S = 5.0
-LIST_LINE = re.compile(r"^(LOG\d{4}\.CSV) (\d+)$")
+LIST_LINE = re.compile(r"^((?:LOG\d{4}|[DM]\d{7})\.CSV) (\d+)$")  # LOGnnnn (old), Dnnnnnnn (daily), Mnnnnnnn (high-res)
 
 
 class TransferError(Exception):

@@ -25,20 +25,24 @@ case "$VARIANT" in
     nosd) BUILD="$ROOT/build/datalogger_nosd"
           EXTRA=(-DDATALOGGER_SD=OFF -DCONFIG_DISK_ACCESS=n -DCONFIG_FILE_SYSTEM=n -DCONFIG_FAT_FILESYSTEM_ELM=n) ;;
     loopback) BUILD="$ROOT/build/datalogger_loopback"
-          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_CUTTEST=ON) ;;
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_CUTTEST=ON -DDATALOGGER_SD_START_MANUAL=1 -DDATALOGGER_SD_MANUAL_MAX_SECONDS=0) ;;
     flood) BUILD="$ROOT/build/datalogger_flood"
-          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON) ;;
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_START_MANUAL=1 -DDATALOGGER_SD_MANUAL_MAX_SECONDS=0) ;;
     rotate) BUILD="$ROOT/build/datalogger_rotate"      # bench: flood + a new file every 20 s (age rule only)
-          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=20 -DDATALOGGER_SD_ROTATE_KB=0) ;;
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=20 -DDATALOGGER_SD_ROTATE_KB=0 -DDATALOGGER_SD_START_MANUAL=1 -DDATALOGGER_SD_MANUAL_MAX_SECONDS=0) ;;
     rotatesize) BUILD="$ROOT/build/datalogger_rotatesize"  # bench: flood + a new file every 2000 KB (size rule only)
-          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=0 -DDATALOGGER_SD_ROTATE_KB=2000) ;;
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=0 -DDATALOGGER_SD_ROTATE_KB=2000 -DDATALOGGER_SD_START_MANUAL=1 -DDATALOGGER_SD_MANUAL_MAX_SECONDS=0) ;;
     rollfail) BUILD="$ROOT/build/datalogger_rollfail"   # bench: loopback, a new file every 20 s, the 2nd rollover fails on purpose
-          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_ROTATE_SECONDS=20 -DDATALOGGER_SD_ROTATE_KB=0 -DDATALOGGER_SD_TEST_FAIL_ROLL=2) ;;
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_ROTATE_SECONDS=20 -DDATALOGGER_SD_ROTATE_KB=0 -DDATALOGGER_SD_TEST_FAIL_ROLL=2 -DDATALOGGER_SD_START_MANUAL=1 -DDATALOGGER_SD_MANUAL_MAX_SECONDS=0) ;;
     size30) BUILD="$ROOT/build/datalogger_size30"      # bench: the REAL 30 MB limit, flood steps of 90 s so about 37 MB are written
-          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=0 -DDATALOGGER_SD_ROTATE_KB=30720 -DDATALOGGER_SD_BENCH_FLOOD_STEP_MS=90000) ;;
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=0 -DDATALOGGER_SD_ROTATE_KB=30720 -DDATALOGGER_SD_BENCH_FLOOD_STEP_MS=90000 -DDATALOGGER_SD_START_MANUAL=1 -DDATALOGGER_SD_MANUAL_MAX_SECONDS=0) ;;
+    button) BUILD="$ROOT/build/datalogger_button"       # bench: a button played on the bus at 20 s, 50 s and 80 s; high-res stops by itself after 30 s
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_CAN_BENCH_BUTTON=ON -DDATALOGGER_SD_MANUAL_MAX_SECONDS=30) ;;
+    ring) BUILD="$ROOT/build/datalogger_ring"          # bench: high-res + flood, a new file every 1000 KB and a 5 MB quota, to watch the ring delete its oldest
+          EXTRA=(-DDATALOGGER_CAN_LOOPBACK=ON -DDATALOGGER_SD_BENCH_FLOOD=ON -DDATALOGGER_SD_ROTATE_SECONDS=0 -DDATALOGGER_SD_ROTATE_KB=1000 -DDATALOGGER_SD_MANUAL_QUOTA_MB=5 -DDATALOGGER_SD_START_MANUAL=1 -DDATALOGGER_SD_MANUAL_MAX_SECONDS=0) ;;
     scaffold) BUILD="$ROOT/build/datalogger_scaffold"
           EXTRA=(-DDATALOGGER_SD=OFF -DDATALOGGER_CAN=OFF -DCONFIG_CAN=n -DCONFIG_DISK_ACCESS=n -DCONFIG_FILE_SYSTEM=n -DCONFIG_FAT_FILESYSTEM_ELM=n) ;;
-    *) echo "variant must be full, nosd, scaffold, loopback, flood, rotate, rotatesize, rollfail or size30"; exit 2 ;;
+    *) echo "variant must be full, nosd, scaffold, loopback, flood, rotate, rotatesize, rollfail, size30, button or ring"; exit 2 ;;
 esac
 
 build() {
@@ -56,5 +60,5 @@ case "${1:-}" in
     build) build ;;
     flash) flash ;;
     all) build; flash ;;
-    *) echo "usage: $0 build|flash|all [full|nosd|scaffold|loopback|flood|rotate|rotatesize|rollfail|size30]"; exit 2 ;;
+    *) echo "usage: $0 build|flash|all [full|nosd|scaffold|loopback|flood|rotate|rotatesize|rollfail|size30|button|ring]"; exit 2 ;;
 esac

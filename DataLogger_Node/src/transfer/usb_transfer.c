@@ -136,7 +136,8 @@ static void do_list(void)
 	struct fs_dir_t dir;
 	struct fs_dirent ent;
 	char b[40];
-	unsigned open_number = sd_logger_open_number();
+	char open_name[XFER_NAME_MAX];
+	bool has_open = sd_logger_open_file(open_name, sizeof(open_name));
 
 	fs_dir_t_init(&dir);
 	if (fs_opendir(&dir, SD_LOGGER_MOUNT_POINT) < 0)
@@ -146,29 +147,25 @@ static void do_list(void)
 	}
 	while (fs_readdir(&dir, &ent) == 0 && ent.name[0] != '\0')
 	{
-		char cmd[24];
-		xfer_request_t r;
+		char name[XFER_NAME_MAX];
 
-		if (ent.type != FS_DIR_ENTRY_FILE)
+		/* Only LOGnnnn.CSV, Dnnnnnnn.CSV and Mnnnnnnn.CSV (the same strict test as a GET); never the one being written. */
+		if (ent.type != FS_DIR_ENTRY_FILE || !xfer_name_valid(ent.name, name) || (has_open && strcmp(name, open_name) == 0))
 		{
 			continue;
 		}
-		(void)snprintf(cmd, sizeof(cmd), "GET %s", ent.name); /* the same strict name test as a GET */
-		r = xfer_parse(cmd);
-		if (r.cmd != XFER_CMD_GET || r.number == open_number)
-		{
-			continue; /* not a log file, or the one being written */
-		}
-		send_text(xfer_format_list_entry(b, sizeof(b), r.number, (uint32_t)ent.size), b);
+		send_text(xfer_format_list_entry(b, sizeof(b), name, (uint32_t)ent.size), b);
 	}
 	(void)fs_closedir(&dir);
 	send_text(xfer_format_end(b, sizeof(b)), b);
 }
 
-static void do_get(unsigned number)
+/* Sends one file. The caller holds the serving lock, so the ring cannot delete it meanwhile. */
+static void get_file(const char *name)
 {
-	char path[sizeof(SD_LOGGER_MOUNT_POINT) + 16];
+	char path[sizeof(SD_LOGGER_MOUNT_POINT) + XFER_NAME_MAX];
 	char b[40];
+	char open_name[XFER_NAME_MAX];
 	struct fs_dirent st;
 	uint32_t crc = 0;
 	uint32_t sent = 0;
@@ -176,12 +173,12 @@ static void do_get(unsigned number)
 	uint32_t send_us = 0;
 	int n;
 
-	if (number == sd_logger_open_number())
+	if (sd_logger_open_file(open_name, sizeof(open_name)) && strcmp(open_name, name) == 0)
 	{
 		send_err("open"); /* the file being written is never served */
 		return;
 	}
-	(void)snprintf(path, sizeof(path), SD_LOGGER_MOUNT_POINT "/LOG%04u.CSV", number);
+	(void)snprintf(path, sizeof(path), SD_LOGGER_MOUNT_POINT "/%s", name);
 	if (fs_stat(path, &st) < 0 || st.type != FS_DIR_ENTRY_FILE)
 	{
 		send_err("notfound");
@@ -218,7 +215,7 @@ static void do_get(unsigned number)
 		send_us += k_cyc_to_us_floor32(k_cycle_get_32() - t0);
 		sent += (uint32_t)n;
 	}
-	LOG_INF("GET LOG%04u.CSV: %u bytes, reading the card %u ms, CRC and USB sending %u ms", number, (unsigned)sent, (unsigned)(read_us / 1000u), (unsigned)(send_us / 1000u));
+	LOG_INF("GET %s: %u bytes, reading the card %u ms, CRC and USB sending %u ms", name, (unsigned)sent, (unsigned)(read_us / 1000u), (unsigned)(send_us / 1000u));
 	(void)fs_close(&l_file);
 	if (sent != (uint32_t)st.size)
 	{
@@ -226,6 +223,13 @@ static void do_get(unsigned number)
 		return;
 	}
 	send_text(xfer_format_crc(b, sizeof(b), crc), b);
+}
+
+static void do_get(const char *name)
+{
+	sd_logger_serving_lock();
+	get_file(name);
+	sd_logger_serving_unlock();
 }
 
 static void transfer_thread(void *p1, void *p2, void *p3)
@@ -259,7 +263,7 @@ static void transfer_thread(void *p1, void *p2, void *p3)
 			do_list();
 			break;
 		case XFER_CMD_GET:
-			do_get(req.number);
+			do_get(req.name);
 			break;
 		default:
 			send_err("badcmd");
