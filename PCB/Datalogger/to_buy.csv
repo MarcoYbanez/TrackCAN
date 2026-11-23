@@ -1,0 +1,15 @@
+Qty,Description,Manufacturer,MPN,DigiKey PN,Verified,Notes
+3,CAN transceiver 8-PDIP (VIO pin for 3.3 V logic),Microchip,MCP2562FD-E/P,search MPN (DK product id 4842807),Yes - DigiKey listing exists,Same pinout as the SOIC parts already owned
+3,DIP-8 socket 0.3in tin,Mill-Max,110-99-308-41-001000,search MPN,Yes - DigiKey listing exists,For MCP2562FD
+3,DIP-16 socket 0.3in tin,Mill-Max,110-44-316-41-001000,search MPN,Yes - DigiKey listing exists,For MCP3208
+4,Female header 1x24 2.54 mm,Sullins,PPPC241LFBN-RC,S7057-ND (unconfirmed),Partly - check it is the tall female type,Teensy 4.1 sockets; 2 needed + spares
+5,KK 254 header 4-pos vertical (12V/GND/CAN H/CAN L),Molex,22-27-2041,search MPN,Part exists; DK number not found,Board connector J1
+5,KK 254 housing 4-pos,Molex,22-01-3047,search MPN,No - confirm on DigiKey,Mating housing for J1
+5,KK 254 header 6-pos vertical (sensors),Molex,22-27-2061,search MPN,No - confirm on DigiKey,Board connector J2: 4 signals + 5V + GND
+5,KK 254 housing 6-pos,Molex,22-01-3067,search MPN,No - confirm on DigiKey,Mating housing for J2
+40,KK 254 crimp socket 22-24 AWG tin,Molex,0016020086,WM2510CT-ND,Yes - from your screenshot,10 pins needed per set pair; extras for mistakes
+10,2.54 mm jumper shunt,Sullins,QPC02SXGN-RC,search MPN,No - confirm on DigiKey,CAN 120 ohm termination select
+1,Crimp tool for 2.54 mm KK terminals,Engineer,PA-09,search MPN,No - confirm,Skip if you already own one
+1,22 AWG stranded wire red + black + 2 CAN colours,generic,,,N/A,12V GND CAN H CAN L leads
+10,Heat-shrink solder sleeve splice,generic,,,N/A,Tapping the gauge sensor wires
+10,TVS diode 1.5KE24A DO-201 (replaces owned 1.5KE36A at D3),Littelfuse,1.5KE24A,search MPN,No - confirm on DigiKey,Clamps ~33 V; 1.5KE36A clamps ~50 V which may exceed the OKI-78SR input limit (datasheet not verified)
