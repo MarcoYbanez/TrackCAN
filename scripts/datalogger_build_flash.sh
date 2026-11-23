@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build and flash the DataLogger Node (Teensy 4.1, Zephyr).
 #   scripts/datalogger_build_flash.sh build [variant]   build (default variant: full)
-#   scripts/datalogger_build_flash.sh flash [variant]   flash it over USB (no button if the running firmware has the TCAN-18 USB reboot; else press PROGRAM when asked)
+#   scripts/datalogger_build_flash.sh flash [variant]   build (incrementally) and flash it over USB (no button if the running firmware has the TCAN-18 USB reboot; else press PROGRAM when asked)
 #   scripts/datalogger_build_flash.sh all [variant]     build, then flash
 # Variants, to find where the boot hang is (TCAN-17, see docs/journal/2026-11-22-tcan17-datalogger-boot-hang-handoff.md):
 #   full       CAN logic + SD logger                       -> build/datalogger_sd
@@ -58,7 +58,7 @@ flash() {
 
 case "${1:-}" in
     build) build ;;
-    flash) flash ;;
+    flash) build; flash ;;  # always build first (an incremental build is fast): flashing an image built before the last source change has bitten twice
     all) build; flash ;;
     *) echo "usage: $0 build|flash|all [full|nosd|scaffold|loopback|flood|rotate|rotatesize|rollfail|size30|button|ring]"; exit 2 ;;
 esac
