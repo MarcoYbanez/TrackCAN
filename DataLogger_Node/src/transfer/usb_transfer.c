@@ -30,7 +30,8 @@ LOG_MODULE_REGISTER(usb_transfer, LOG_LEVEL_INF);
 #define THREAD_PRIORITY 12 /* below the SD logger (10) and the CAN thread (7) */
 #define RX_RING_SIZE 128
 #define TX_RING_SIZE 4096
-#define CHUNK_SIZE 4096
+#define FILL_MAX 64
+#define CHUNK_SIZE 4096 /* 512-byte fills, 32 KB reads and quieter SD logging were all measured and made no difference: the card read is the limit */
 #define TX_STALL_MS 3000 /* the host stopped reading (port closed, cable out): give up the transfer */
 
 /*******************************************************
@@ -77,7 +78,7 @@ static void uart_cb(const struct device *dev, void *user_data)
 		if (uart_irq_tx_ready(dev))
 		{
 			uint8_t *p;
-			uint32_t len = ring_buf_get_claim(&l_tx_rb, &p, 64);
+			uint32_t len = ring_buf_get_claim(&l_tx_rb, &p, FILL_MAX);
 
 			if (len == 0)
 			{
@@ -171,6 +172,8 @@ static void do_get(unsigned number)
 	struct fs_dirent st;
 	uint32_t crc = 0;
 	uint32_t sent = 0;
+	uint32_t read_us = 0;
+	uint32_t send_us = 0;
 	int n;
 
 	if (number == sd_logger_open_number())
@@ -193,7 +196,10 @@ static void do_get(unsigned number)
 	send_text(xfer_format_ok(b, sizeof(b), (uint32_t)st.size), b);
 	while (sent < (uint32_t)st.size)
 	{
+		uint32_t t0 = k_cycle_get_32();
+
 		n = (int)fs_read(&l_file, l_chunk, sizeof(l_chunk));
+		read_us += k_cyc_to_us_floor32(k_cycle_get_32() - t0);
 		if (n <= 0)
 		{
 			break;
@@ -202,14 +208,17 @@ static void do_get(unsigned number)
 		{
 			n = (int)((uint32_t)st.size - sent); /* never more than the size that was announced */
 		}
+		t0 = k_cycle_get_32();
 		crc = xfer_crc32_update(crc, l_chunk, (size_t)n);
 		if (send_all(l_chunk, (size_t)n) < 0)
 		{
 			(void)fs_close(&l_file);
 			return;
 		}
+		send_us += k_cyc_to_us_floor32(k_cycle_get_32() - t0);
 		sent += (uint32_t)n;
 	}
+	LOG_INF("GET LOG%04u.CSV: %u bytes, reading the card %u ms, CRC and USB sending %u ms", number, (unsigned)sent, (unsigned)(read_us / 1000u), (unsigned)(send_us / 1000u));
 	(void)fs_close(&l_file);
 	if (sent != (uint32_t)st.size)
 	{
