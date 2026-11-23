@@ -264,6 +264,27 @@ static void test_rotation(void)
 	CHECK(logger_rotation_due(&r, 0x000001E8u));	  /* 1000 ms */
 }
 
+static void test_idle_probe(void)
+{
+	/* Due exactly at the interval, not before. */
+	CHECK(!logger_idle_probe_due(1000, 1000, 2000));
+	CHECK(!logger_idle_probe_due(1000, 2999, 2000)); /* 1999 ms */
+	CHECK(logger_idle_probe_due(1000, 3000, 2000));	 /* 2000 ms */
+	CHECK(logger_idle_probe_due(1000, 9000, 2000));	 /* long overdue stays due */
+
+	/* Interval 0 means never, whatever the times. */
+	CHECK(!logger_idle_probe_due(0, 0xFFFFFFFFu, 0));
+	CHECK(!logger_idle_probe_due(5, 5, 0));
+
+	/* The millisecond counter wraps: only ONE side of a naive "now >= last + interval" comparison wraps here. */
+	CHECK(!logger_idle_probe_due(0xFFFFFE00u, 0xFFFFFFFFu, 2000)); /* 511 ms */
+	CHECK(!logger_idle_probe_due(0xFFFFFE00u, 0x000005CFu, 2000)); /* 512 + 1487 = 1999 ms, the counter has wrapped */
+	CHECK(logger_idle_probe_due(0xFFFFFE00u, 0x000005D0u, 2000));  /* 2000 ms */
+
+	/* A last access in the "future" (the clock moved on after it was read) is a huge age: due, not stuck forever. */
+	CHECK(logger_idle_probe_due(3000, 2999, 2000));
+}
+
 /*******************************************************
  * Public Function Definitions
  *******************************************************/
@@ -277,6 +298,7 @@ int main(void)
 	test_directory_scan_one_entry_at_a_time();
 	test_policy();
 	test_rotation();
+	test_idle_probe();
 
 	printf("%d checks, %d failures\n", l_checks, l_failures);
 	return l_failures == 0 ? 0 : 1;

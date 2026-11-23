@@ -91,6 +91,7 @@ FILES = {
     "LOG0002.CSV": bytes(range(256)) * 100,  # binary-ish and large: nothing may be altered or cut
     "LOG0003.CSV": b"x" * 5000,
 }
+BIG = {"LOG0099.CSV": (b"0123456789abcdef" * 1024 * 1024 * 2)[: 31 * 1024 * 1024]}  # 31 MB: the size a 30 MB rotation produces
 results = []
 
 
@@ -156,6 +157,24 @@ def main():
         open(os.path.join(d, "LOG0003.CSV"), "wb").write(b"x" * 10)
         (got, skipped, failed), dev = run_pull({}, d)
         check("an incomplete copy (wrong size) is downloaded again", "LOG0003.CSV" in got and open(os.path.join(d, "LOG0003.CSV"), "rb").read() == FILES["LOG0003.CSV"])
+
+    # A rotation-sized file: must arrive complete and fast (the old buffer handling was quadratic and the Node gave up on it).
+    import time
+    dev, path, slave = with_device(BIG)
+    port = pull.Port(path)
+    pull.TIMEOUT_S = 5.0
+    started = time.time()
+    try:
+        data, seconds = pull.get_file(port, "LOG0099.CSV")
+        check("a 31 MB file arrives complete and CRC ok", data == BIG["LOG0099.CSV"])
+        check(f"a 31 MB file takes under 20 s ({time.time() - started:.1f} s)", time.time() - started < 20)
+    except pull.TransferError as e:
+        check(f"a 31 MB file arrives ({e})", False)
+    finally:
+        port.close()
+        dev.stop = True
+        os.close(slave)
+        pull.TIMEOUT_S = 0.6
 
     # chains(): a file that says continues= joins the run before it; anything else starts a new run.
     with tempfile.TemporaryDirectory() as d:

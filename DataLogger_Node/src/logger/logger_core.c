@@ -232,3 +232,8 @@ bool logger_rotation_due(const logger_rotation_t *r, uint32_t now_ms)
 	}
 	return r->max_age_ms != 0u && (uint32_t)(now_ms - r->opened_ms) >= r->max_age_ms;
 }
+
+bool logger_idle_probe_due(uint32_t last_access_ms, uint32_t now_ms, uint32_t interval_ms)
+{
+	return interval_ms != 0u && (uint32_t)(now_ms - last_access_ms) >= interval_ms;
+}
