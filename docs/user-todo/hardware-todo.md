@@ -143,3 +143,26 @@ The SD logger builds and its logic is host tested, but it has **never run on the
 - [ ] Reinsert the card, power on again: a **new** file (`LOG0002.CSV`) must appear and `LOG0001.CSV` must be untouched.
 - [ ] Pull the card out while it is logging: the LED must go to the fast blink and the CAN side must keep running; put it back and logging
       must resume in a new file within a few seconds.
+
+## DataLogger PCB (TCAN-26 / TCAN-27)
+
+The board is designed and the Gerbers exist (`PCB/Datalogger/fab/`), but **nothing has been ordered or built**. Details in
+[the journal](../journal/2026-11-23-tcan26-27-datalogger-pcb.md).
+
+Before ordering:
+
+- [ ] **Open the Gerbers in the fab's online preview** (or a Gerber viewer) and compare against `PCB/Datalogger/Datalogger_schematic.png` and the board in KiCad.
+- [ ] **Check the Teensy row spacing** with calipers: the pin rows should be **15.24 mm** (0.6 in) apart, centre to centre. *Why: I measured it from a photo.*
+- [ ] **Find the OKI-78SR-5/1.5-W36-C datasheet** (Murata) and tell Claude its **absolute-maximum input voltage**. *Why: decides the TVS. D3 is drawn as 1.5KE24A.*
+- [ ] **Order the parts in `PCB/Datalogger/to_buy.csv`** and confirm each part number on DigiKey (several are marked unconfirmed).
+- [ ] Decide on a **fuse** for the 12V input (none is drawn).
+
+Before powering a built board (use the KA3005DE with the current limit set low, nothing in the sockets):
+
+- [ ] Without the Teensy and MCP3208 fitted: 12 V in on J1 gives **5 V** at the Teensy VIN socket and the regulator output; swap the supply leads and confirm
+      the board draws **no current** (reverse-polarity protection).
+- [ ] Measure **3.3 V** only after the Teensy is fitted; each sensor input at 5 V in should read about **3.2 V** at the MCP3208 pin.
+- [ ] **Teensy USB and board power:** cut the VUSB-VIN pad pair and solder a 1N5819 across it (USB side is the anode) *before* connecting USB with the board powered.
+      Until then, unplug the 12V connector first. *Why: PJRC says power should not be applied to VIN while USB is connected; the diode is my suggestion, not PJRC's.*
+- [ ] J3 console: adapter TX to pin 2 (Teensy RX), adapter RX to pin 3 (Teensy TX), **3.3 V logic only**, 115200 baud.
+- [ ] On a bench CAN bus with a second node: bit time **2.0 us** (500 kbit/s) on CAN_H/CAN_L; set JP1 only on an end-of-bus node.
