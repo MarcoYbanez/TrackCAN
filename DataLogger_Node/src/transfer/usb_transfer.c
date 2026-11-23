@@ -179,14 +179,18 @@ static void get_file(const char *name)
 		return;
 	}
 	(void)snprintf(path, sizeof(path), SD_LOGGER_MOUNT_POINT "/%s", name);
-	if (fs_stat(path, &st) < 0 || st.type != FS_DIR_ENTRY_FILE)
+	n = fs_stat(path, &st);
+	if (n < 0 || st.type != FS_DIR_ENTRY_FILE)
 	{
+		LOG_WRN("GET %s: not found (%d)", name, n);
 		send_err("notfound");
 		return;
 	}
 	fs_file_t_init(&l_file);
-	if (fs_open(&l_file, path, FS_O_READ) < 0)
+	n = fs_open(&l_file, path, FS_O_READ);
+	if (n < 0)
 	{
+		LOG_ERR("GET %s: cannot open for reading (%d)", name, n); /* so a failure like this is never silent */
 		send_err("open");
 		return;
 	}

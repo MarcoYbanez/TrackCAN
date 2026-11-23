@@ -734,6 +734,9 @@ static int run_logging(void)
 		if (ret == 0 && poll_mode(now) && l_family != family_for_mode())
 		{
 			ret = switch_family(family_for_mode());
+			/* The new file was opened a moment AFTER the time read above. Leaving `now` as it was makes the new file's age negative, which the
+			 * wrap-safe unsigned subtraction reads as a huge age: the rotation check below would roll the file again at once. */
+			now = k_uptime_get_32();
 		}
 		{
 			uint32_t used = k_msgq_num_used_get(&l_queue);
@@ -828,6 +831,7 @@ static int run_logging(void)
 		if (ret == 0 && logger_rotation_due(&l_rot, now))
 		{
 			ret = roll_file();
+			now = k_uptime_get_32(); /* the new file opened after `now`: see above */
 		}
 		if ((uint32_t)(now - last_status_ms) >= STATUS_LOG_MS)
 		{

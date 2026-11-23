@@ -24,6 +24,7 @@ HEARTBEAT_ID = 0x702
 DAILY_INTERVAL_MS = 1000  # the daily mode's reduction: one frame per (direction, ID) per second
 JITTER_MS = 2  # two threads stamp a frame before queuing it: a step back of 1-2 ms is possible (bench flood only)
 FLOOD_ID, FLOOD_MARK_ID = 0x7F0, 0x7FF  # bench flood generator: sequence number and rate-step marker
+BENCH_BUTTON_ID = 0x400  # the bench button player writes Logger_Control straight onto the bus: seen only as received
 
 
 def parse(name, lines):
@@ -109,8 +110,8 @@ def check(files, loopback):
     info["heartbeat_gaps_explained"] = len(hb_gaps) if dropped else 0
     if loopback and not daily:
         for fid in sorted(set(tx) | set(rx)):
-            if fid in (FLOOD_ID, FLOOD_MARK_ID):
-                continue  # the bench flood is TX only by design
+            if fid in (FLOOD_ID, FLOOD_MARK_ID, BENCH_BUTTON_ID):
+                continue  # the bench flood is TX only by design, and the bench button RX only
             if abs(tx[fid] - rx[fid]) > 2 + (len(parsed) - 1) * 2:  # a rollover may split a TX from its RX
                 problems.append(f"loopback ID {fid:03X}: {tx[fid]} TX but {rx[fid]} RX")
     if seqs and not daily:

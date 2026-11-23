@@ -121,6 +121,7 @@ CASES = [  # (name, lines, expected exit code: 0 pass, 1 fail)
     ("loopback TX without RX", [x for x in good_log() if not x.startswith(("510,RX", "560,RX", "610,RX", "660,RX"))], 1),
     ("loopback log without its NOTE", [x for x in good_log() if "loopback" not in x], 1),
     ("flood frames are TX only", good_log() + ["2000,TX,7F0,4,00000000", "2001,TX,7F0,4,00000001"], 0),
+    ("bench button frames are RX only", good_log() + ["2000,RX,400,1,00", "2100,RX,400,1,01", "2200,RX,400,1,01", "2300,RX,400,1,00"], 0),
     ("flood sequence gap, silent", good_log() + ["2000,TX,7F0,4,00000000", "2001,TX,7F0,4,00000005"], 1),
 ]
 
