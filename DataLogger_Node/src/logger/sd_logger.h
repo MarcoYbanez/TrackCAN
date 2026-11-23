@@ -15,6 +15,11 @@
 #include <stdint.h>
 
 /*******************************************************
+ * Macros
+ *******************************************************/
+#define SD_LOGGER_MOUNT_POINT "/SD:"
+
+/*******************************************************
  * Type Definitions
  *******************************************************/
 typedef enum
@@ -33,6 +38,9 @@ typedef enum
 void sd_logger_start(void);
 
 sd_logger_state_t sd_logger_state(void);
+
+/* The number of the LOGnnnn.CSV being written now, or 0 when no file is open. Other readers (the USB copy, TCAN-21) must not serve it. */
+unsigned sd_logger_open_number(void);
 
 /*
  * Before a deliberate reboot (TCAN-18): drains the queue, writes the buffer, syncs and closes the file, and stops the logger for good.

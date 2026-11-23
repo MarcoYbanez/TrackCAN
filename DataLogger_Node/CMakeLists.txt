@@ -34,6 +34,7 @@ else()
 endif()
 target_include_directories(app PRIVATE
 	src/logger
+	src/transfer
 	src/bootloader
 	${TRACKCAN_PATH}/can
 	${TRACKCAN_PATH}/can/common
@@ -64,6 +65,8 @@ if(DATALOGGER_SD)
 	target_sources(app PRIVATE
 		src/logger/logger_core.c
 		src/logger/sd_logger.c
+		src/transfer/logger_xfer.c
+		src/transfer/usb_transfer.c
 	)
 else()
 	target_compile_definitions(app PRIVATE DATALOGGER_NO_SD=1)
