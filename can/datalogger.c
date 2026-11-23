@@ -25,6 +25,7 @@ LOG_MODULE_REGISTER(datalogger_can, LOG_LEVEL_INF);
 #define CAN_THREAD_PERIOD_MS 5
 #define CAN_RX_QUEUE_LEN 32
 #define CAN_INIT_RETRY_MS 1000
+#define CAN_STATUS_MS 10000
 
 /*******************************************************
  * Static Variables
@@ -198,6 +199,8 @@ static void can_thread(void *p1, void *p2, void *p3)
     }
     LOG_INF("TrackCAN up on %s", l_can_dev->name);
 
+    uint32_t last_status_ms = k_uptime_get_32();
+
     while (1) {
         k_spinlock_key_t key = k_spin_lock(&l_lock);
 
@@ -205,6 +208,14 @@ static void can_thread(void *p1, void *p2, void *p3)
         k_spin_unlock(&l_lock, key);
 
         publish();
+        if ((uint32_t)(k_uptime_get_32() - last_status_ms) >= CAN_STATUS_MS) {
+            int state = -1;
+            unsigned tec = 0, rec = 0;
+
+            last_status_ms = k_uptime_get_32();
+            (void)datalogger_can_status(&state, &tec, &rec);
+            LOG_INF("CAN state %d (0 active, 1 warning, 2 passive, 3 bus-off) tec %u rec %u", state, tec, rec);
+        }
         k_msleep(CAN_THREAD_PERIOD_MS);
     }
 }
