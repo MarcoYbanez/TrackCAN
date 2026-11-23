@@ -15,6 +15,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/ring_buffer.h>
+#include <zephyr/kernel.h>
 
 #include "logger_xfer.h"
 #include "sd_logger.h"
@@ -46,7 +47,8 @@ static K_SEM_DEFINE(l_tx_space, 0, 1);
 K_THREAD_STACK_DEFINE(l_xfer_stack, THREAD_STACK_SIZE);
 static struct k_thread l_thread;
 
-static uint8_t l_chunk[CHUNK_SIZE];
+/* The SD card DMAs into this (see sd_logger.c): non-cacheable and on a cache line, or the cache invalidation after a read clobbers its neighbours. */
+static uint8_t l_chunk[CHUNK_SIZE] __nocache __aligned(CONFIG_DCACHE_LINE_SIZE);
 static struct fs_file_t l_file;
 
 /*******************************************************
@@ -203,6 +205,7 @@ static void get_file(const char *name)
 		read_us += k_cyc_to_us_floor32(k_cycle_get_32() - t0);
 		if (n <= 0)
 		{
+			LOG_ERR("GET %s: read returned %d after %u of %u bytes", name, n, (unsigned)sent, (unsigned)st.size);
 			break;
 		}
 		if ((uint32_t)n > (uint32_t)st.size - sent)
@@ -220,7 +223,11 @@ static void get_file(const char *name)
 		sent += (uint32_t)n;
 	}
 	LOG_INF("GET %s: %u bytes, reading the card %u ms, CRC and USB sending %u ms", name, (unsigned)sent, (unsigned)(read_us / 1000u), (unsigned)(send_us / 1000u));
-	(void)fs_close(&l_file);
+	n = fs_close(&l_file);
+	if (n < 0)
+	{
+		LOG_WRN("GET %s: fs_close returned %d", name, n);
+	}
 	if (sent != (uint32_t)st.size)
 	{
 		send_err("io"); /* the host sees fewer bytes than announced, or a wrong CRC */

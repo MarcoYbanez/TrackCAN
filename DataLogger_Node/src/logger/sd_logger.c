@@ -99,7 +99,15 @@ static const struct gpio_dt_spec l_led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios)
 
 K_MSGQ_DEFINE(l_queue, sizeof(struct rec), QUEUE_LEN, 4);
 
-static FATFS l_fat;
+/*
+ * Every buffer the SD controller reads into or writes from by DMA lives in non-cacheable memory and starts on a cache line. The NXP driver
+ * invalidates the data cache over a receive buffer after each read, and the invalidation is rounded out to whole 32-byte lines: any variable
+ * that shares an edge line with the buffer loses its latest, unwritten value. Found the hard way (TCAN-20): the FatFS window ends inside a
+ * line shared with a file object, a fresh fs_open() was undone by a directory scan on another thread, and the pool of file objects leaked.
+ * The FatFS object holds the window, so it is placed here as a whole.
+ */
+#define DMA_ALIGN CONFIG_DCACHE_LINE_SIZE
+static FATFS l_fat __nocache __aligned(DMA_ALIGN);
 static struct fs_mount_t l_mount = {
 	.type = FS_FATFS,
 	.fs_data = &l_fat,
@@ -107,7 +115,7 @@ static struct fs_mount_t l_mount = {
 };
 static struct fs_file_t l_file;
 
-static char l_buf[BUF_SIZE];
+static char l_buf[BUF_SIZE] __nocache __aligned(DMA_ALIGN);
 static size_t l_len;
 static logger_policy_t l_policy;
 
@@ -117,7 +125,7 @@ static uint32_t l_lines;
 static uint32_t l_bytes;
 static uint32_t l_last_sync_ms;
 static uint32_t l_last_card_ms; /* the last time the card was written, synced or probed */
-static uint8_t l_probe_buf[512] __aligned(4);
+static uint8_t l_probe_buf[512] __nocache __aligned(DMA_ALIGN);
 static unsigned l_number;        /* the number of the file now open */
 static seg_family_t l_family;    /* and its family: daily (Dnnnnnnn.CSV) or manual (Mnnnnnnn.CSV) */
 static logger_rotation_t l_rot;
@@ -409,7 +417,7 @@ static void enforce_quota(seg_family_t fam)
  * the card is exFAT ("EXFAT"), FAT ("MSDOS", "mkfs.fat") or unformatted (zeros), without ever writing to it. */
 static void log_card_identity(void)
 {
-	static uint8_t sector[512];
+	static uint8_t sector[512] __nocache __aligned(DMA_ALIGN);
 	uint32_t count = 0;
 	char oem[9] = {0};
 
