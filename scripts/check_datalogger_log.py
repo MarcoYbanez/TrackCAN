@@ -19,10 +19,12 @@ from collections import Counter
 HEADER = "t_ms,dir,id,dlc,data"
 FRAME = re.compile(r"^(\d+),(TX|RX),([0-9A-F]{3}),([0-8]),([0-9A-F]*)$")
 NOTE = re.compile(r"^(\d+),NOTE,,,(.*)$")
-FILE_NAME = re.compile(r"^LOG(\d{4})\.CSV$", re.IGNORECASE)
+FILE_NAME = re.compile(r"^(?:LOG(\d{4})|[DM](\d{7}))\.CSV$", re.IGNORECASE)  # old, daily, high-res
 HEARTBEAT_ID = 0x702
+DAILY_INTERVAL_MS = 1000  # the daily mode's reduction: one frame per (direction, ID) per second
 JITTER_MS = 2  # two threads stamp a frame before queuing it: a step back of 1-2 ms is possible (bench flood only)
 FLOOD_ID, FLOOD_MARK_ID = 0x7F0, 0x7FF  # bench flood generator: sequence number and rate-step marker
+BENCH_BUTTON_ID = 0x400  # the bench button player writes Logger_Control straight onto the bus: seen only as received
 
 
 def parse(name, lines):
@@ -67,7 +69,7 @@ def check(files, loopback):
             previous = parsed[i - 1][0]
             want = f"continues={previous}"
             m_prev, m_cur = FILE_NAME.match(os.path.basename(previous)), FILE_NAME.match(os.path.basename(name))
-            if m_prev and m_cur and int(m_cur[1]) != int(m_prev[1]) + 1:
+            if m_prev and m_cur and int(m_cur[1] or m_cur[2]) != int(m_prev[1] or m_prev[2]) + 1:
                 problems.append(f"{name}: not the next file after {previous}")
             if not any(text == want for _, text in notes):
                 problems.append(f"{name}: no NOTE '{want}'")
@@ -86,21 +88,33 @@ def check(files, loopback):
                 heartbeat.append((t, int(data[2:4], 16)))
 
     dropped = [text for _, text in all_notes if text.startswith("dropped=")]
+    # A daily file (NOTE mode=daily) is a reduced stream: about one frame per (direction, ID) per second. It is not expected to hold every frame, so
+    # the continuity and pairing checks do not apply; what is checked instead is the reduction itself (no ID twice within a second).
+    daily = any(text.startswith("mode=daily") for _, text in all_notes)
+    if daily:
+        seen_at = {}
+        for name, recs, _ in parsed:
+            for t, direction, fid, dlc, data in recs:
+                key = (direction, fid)
+                if key in seen_at and t - seen_at[key] < DAILY_INTERVAL_MS - JITTER_MS:
+                    problems.append(f"{name}: daily log has {direction} {fid:03X} twice within {t - seen_at[key]} ms (the reduction is {DAILY_INTERVAL_MS} ms)")
+                    break
+                seen_at[key] = t
     info = {"tx": tx, "rx": rx, "notes": all_notes, "dropped": dropped, "last_t": last_t, "gaps": gaps_between, "seqs": seqs,
             "marks": marks, "lines": sum(len(lines) for _, lines in files)}
 
-    hb_gaps = [(a, b) for (_, a), (_, b) in zip(heartbeat, heartbeat[1:]) if (b - a) % 256 != 1]
+    hb_gaps = [(a, b) for (_, a), (_, b) in zip(heartbeat, heartbeat[1:]) if (b - a) % 256 != 1] if not daily else []
     if hb_gaps and not dropped:
         problems.append(f"heartbeat counter skipped {len(hb_gaps)} time(s), e.g. {hb_gaps[0][0]} -> {hb_gaps[0][1]}, "
                         "and the log never said frames were dropped (silent loss)")
     info["heartbeat_gaps_explained"] = len(hb_gaps) if dropped else 0
-    if loopback:
+    if loopback and not daily:
         for fid in sorted(set(tx) | set(rx)):
-            if fid in (FLOOD_ID, FLOOD_MARK_ID):
-                continue  # the bench flood is TX only by design
+            if fid in (FLOOD_ID, FLOOD_MARK_ID, BENCH_BUTTON_ID):
+                continue  # the bench flood is TX only by design, and the bench button RX only
             if abs(tx[fid] - rx[fid]) > 2 + (len(parsed) - 1) * 2:  # a rollover may split a TX from its RX
                 problems.append(f"loopback ID {fid:03X}: {tx[fid]} TX but {rx[fid]} RX")
-    if seqs:
+    if seqs and not daily:
         # Flood bench: every missing sequence number is a lost frame. It must have been counted (a dropped= NOTE), never silent. The
         # count starts from 0 only if the first file is the start of a run.
         starts_run = not any(text.startswith("continues=") for _, text in parsed[0][2])
@@ -140,7 +154,7 @@ def main(argv):
               f"min {min(g for _, _, g in info['gaps'])} ms, max {worst} ms")
     if info.get("heartbeat_gaps_explained"):
         print(f"  heartbeat gaps: {info['heartbeat_gaps_explained']}, explained by a dropped= note")
-    if info["seqs"]:
+    if info["seqs"] and "flood_missing" in info:
         print(f"  flood: {len(info['seqs'])} frames, {info['flood_missing']} missing; rate steps: {[r for _, r in info['marks']]}")
     if info["dropped"]:
         print(f"  frames were dropped: {info['dropped'][-1]}")

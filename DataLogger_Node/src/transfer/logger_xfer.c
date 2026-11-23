@@ -11,8 +11,8 @@
 #include <stdio.h>
 #include <string.h>
 
-/* An overlong line must never look like a command: it is cut at XFER_LINE_MAX, and the longest command ("GET LOG0005.CSV") is 15 characters. */
-_Static_assert(XFER_LINE_MAX > 15u, "XFER_LINE_MAX must be longer than any command");
+/* An overlong line must never look like a command: it is cut at XFER_LINE_MAX, and the longest command ("GET D0000007.CSV") is 16 characters. */
+_Static_assert(XFER_LINE_MAX > 16u, "XFER_LINE_MAX must be longer than any command");
 
 /*******************************************************
  * Static Function Definitions
@@ -44,36 +44,65 @@ void xfer_line_init(xfer_line_t *l)
 	l->text[0] = '\0';
 }
 
+bool xfer_name_valid(const char *name, char out[XFER_NAME_MAX])
+{
+	size_t len = strlen(name);
+	size_t first; /* index of the first digit */
+	size_t digits;
+	unsigned long n = 0;
+
+	if (len == 11u && upper(name[0]) == 'L' && upper(name[1]) == 'O' && upper(name[2]) == 'G')
+	{
+		first = 3;
+		digits = 4;
+	}
+	else if (len == 12u && (upper(name[0]) == 'D' || upper(name[0]) == 'M'))
+	{
+		first = 1;
+		digits = 7;
+	}
+	else
+	{
+		return false;
+	}
+	if (name[first + digits] != '.' || upper(name[first + digits + 1]) != 'C' || upper(name[first + digits + 2]) != 'S'
+		|| upper(name[first + digits + 3]) != 'V')
+	{
+		return false;
+	}
+	for (size_t i = first; i < first + digits; i++)
+	{
+		if (name[i] < '0' || name[i] > '9')
+		{
+			return false;
+		}
+		n = n * 10u + (unsigned long)(name[i] - '0');
+	}
+	if (n < 1u)
+	{
+		return false;
+	}
+	for (size_t i = 0; i <= len; i++)
+	{
+		out[i] = upper(name[i]);
+	}
+	return true;
+}
+
 xfer_request_t xfer_parse(const char *line)
 {
-	xfer_request_t r = { XFER_CMD_BAD, 0 };
-	unsigned n = 0;
+	xfer_request_t r;
 
+	memset(&r, 0, sizeof(r));
+	r.cmd = XFER_CMD_BAD;
 	if (strcmp(line, "LIST") == 0)
 	{
 		r.cmd = XFER_CMD_LIST;
-		return r;
 	}
-	/* "GET LOGnnnn.CSV": exactly 15 characters. */
-	if (strlen(line) != 15u || strncmp(line, "GET ", 4) != 0 || upper(line[4]) != 'L' || upper(line[5]) != 'O' || upper(line[6]) != 'G'
-		|| line[11] != '.' || upper(line[12]) != 'C' || upper(line[13]) != 'S' || upper(line[14]) != 'V')
+	else if (strncmp(line, "GET ", 4) == 0 && xfer_name_valid(line + 4, r.name))
 	{
-		return r;
+		r.cmd = XFER_CMD_GET;
 	}
-	for (size_t i = 7; i < 11; i++)
-	{
-		if (line[i] < '0' || line[i] > '9')
-		{
-			return r;
-		}
-		n = n * 10u + (unsigned)(line[i] - '0');
-	}
-	if (n < 1u || n > 9999u)
-	{
-		return r;
-	}
-	r.cmd = XFER_CMD_GET;
-	r.number = n;
 	return r;
 }
 
@@ -97,9 +126,9 @@ bool xfer_line_push(xfer_line_t *l, uint8_t byte, xfer_request_t *out)
 	return false;
 }
 
-size_t xfer_format_list_entry(char *buf, size_t size, unsigned number, uint32_t bytes)
+size_t xfer_format_list_entry(char *buf, size_t size, const char *name, uint32_t bytes)
 {
-	return finish(buf, size, snprintf(buf, size, "LOG%04u.CSV %lu\n", number, (unsigned long)bytes));
+	return finish(buf, size, snprintf(buf, size, "%s %lu\n", name, (unsigned long)bytes));
 }
 
 size_t xfer_format_end(char *buf, size_t size)

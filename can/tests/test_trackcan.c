@@ -121,6 +121,8 @@ static void test_message_table(void)
         {TCAN_MSG_HEARTBEAT_DASH, 0x701, 2, 1000, TCAN_NODE_DASH},
         {TCAN_MSG_HEARTBEAT_DATALOGGER, 0x702, 2, 1000, TCAN_NODE_DATALOGGER},
         {TCAN_MSG_HEARTBEAT_ETHANOL, 0x703, 2, 1000, TCAN_NODE_ETHANOL},
+        {TCAN_MSG_DATALOGGER_STATUS, 0x202, 1, 200, TCAN_NODE_DATALOGGER},
+        {TCAN_MSG_LOGGER_CONTROL, 0x400, 1, 100, TCAN_NODE_CONTROLLER},
     };
 
     for (unsigned i = 0; i < sizeof(expect) / sizeof(expect[0]); i++) {
@@ -244,6 +246,70 @@ static void test_unpack_known_bytes(void)
 
     /* Too-short buffers are rejected rather than read out of bounds. */
     CHECK(trackcan_data_logger_analog_unpack(&a, analog, 7) != 0);
+}
+
+static void test_logger_messages(void)
+{
+    /* DataLogger_Status (0x202): LogMode in bits 0-1, CardState in bits 2-3. Logger_Control (0x400): LogButton in bit 0. Bytes by hand. */
+    struct trackcan_data_logger_status_t st = {0};
+    struct trackcan_logger_control_t ctl = {0};
+    uint8_t b[8];
+    tcan_t can;
+    uint8_t payload[8] = {0};
+
+    st.log_mode = 1; /* high resolution */
+    st.card_state = 3; /* logging */
+    memset(b, 0xAA, sizeof(b));
+    CHECK(trackcan_data_logger_status_pack(b, &st, 1) == 1);
+    CHECK(b[0] == 0x0D); /* 1 | (3 << 2) */
+    st.log_mode = 0;
+    st.card_state = 1; /* no card */
+    CHECK(trackcan_data_logger_status_pack(b, &st, 1) == 1);
+    CHECK(b[0] == 0x04);
+    st.log_mode = 0;
+    st.card_state = 0;
+    CHECK(trackcan_data_logger_status_pack(b, &st, 1) == 1 && b[0] == 0x00);
+
+    ctl.log_button = 1;
+    CHECK(trackcan_logger_control_pack(b, &ctl, 1) == 1 && b[0] == 0x01);
+    ctl.log_button = 0;
+    CHECK(trackcan_logger_control_pack(b, &ctl, 1) == 1 && b[0] == 0x00);
+
+    /* Decoding hand-written bytes (the reverse direction). Bits that are not the signal are ignored. */
+    {
+        static const uint8_t status[] = {0x0D};
+        static const uint8_t status_noise[] = {0xF2}; /* LogMode bits 10b = 2 would be out of range: only bit 0..1 read; CardState = 0 */
+        static const uint8_t pressed[] = {0x01};
+        static const uint8_t released_noise[] = {0xFE}; /* every bit set except bit 0 */
+
+        CHECK(trackcan_data_logger_status_unpack(&st, status, sizeof(status)) == 0);
+        CHECK(st.log_mode == 1 && st.card_state == 3);
+        CHECK(trackcan_data_logger_status_unpack(&st, status_noise, sizeof(status_noise)) == 0);
+        CHECK(st.log_mode == 2 && st.card_state == 0);
+        CHECK(trackcan_logger_control_unpack(&ctl, pressed, sizeof(pressed)) == 0 && ctl.log_button == 1);
+        CHECK(trackcan_logger_control_unpack(&ctl, released_noise, sizeof(released_noise)) == 0 && ctl.log_button == 0);
+        CHECK(trackcan_logger_control_unpack(&ctl, pressed, 0) != 0); /* too short is rejected */
+    }
+
+    /* Who may send what: only the DataLogger sends its status, only a Controller sends the button. */
+    fake_reset();
+    CHECK(tcan_init(&can, &l_port, TCAN_NODE_DATALOGGER));
+    CHECK(tcan_tx(&can, TCAN_MSG_LOGGER_CONTROL, payload) == -2);
+    CHECK(tcan_tx(&can, TCAN_MSG_DATALOGGER_STATUS, payload) == 0);
+    CHECK(l_last_sent.id == 0x202 && l_last_sent.dlc == 1);
+    fake_reset();
+    CHECK(tcan_init(&can, &l_port, TCAN_NODE_CONTROLLER));
+    CHECK(tcan_tx(&can, TCAN_MSG_DATALOGGER_STATUS, payload) == -2);
+    CHECK(tcan_tx(&can, TCAN_MSG_LOGGER_CONTROL, payload) == 0);
+    CHECK(l_last_sent.id == 0x400 && l_last_sent.dlc == 1);
+
+    /* The new IDs reach the right message when received. */
+    {
+        tcan_msg_t m;
+
+        CHECK(tcan_msg_from_id(0x400, &m) && m == TCAN_MSG_LOGGER_CONTROL);
+        CHECK(tcan_msg_from_id(0x202, &m) && m == TCAN_MSG_DATALOGGER_STATUS);
+    }
 }
 
 static void test_staleness(void)
@@ -488,6 +554,7 @@ int main(void)
     test_message_table();
     test_pack_known_bytes();
     test_unpack_known_bytes();
+    test_logger_messages();
     test_staleness();
     test_rx_tracking();
     test_tx_schedule();

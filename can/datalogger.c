@@ -7,6 +7,7 @@
  * Includes
  *******************************************************/
 #include "datalogger.h"
+#include "logger_segments.h"
 
 #include <string.h>
 #include <zephyr/device.h>
@@ -38,6 +39,16 @@ static tcan_t l_can;
 static struct k_spinlock l_lock;
 static uint8_t l_heartbeat_counter;
 static datalogger_can_tap_t l_tap;
+
+/* The logging button: a level in Logger_Control frames, turned into one callback per accepted press (see logger_segments.h for the rules). */
+#define BUTTON_DEBOUNCE_MS 300u
+#define BUTTON_STALE_MS 400u /* the frame comes every 100 ms */
+static seg_button_t l_btn;
+static uint32_t l_btn_last_rx_ms;
+static datalogger_can_button_cb_t l_btn_cb;
+static unsigned l_logger_mode;
+static unsigned l_logger_card;
+static volatile bool l_can_up; /* the controller has started */
 
 /*
  * PLACEHOLDER VALUES. The Defi sensor transfer curves are not known yet (see
@@ -174,6 +185,18 @@ static void publish(void)
         (void)tcan_tx(&l_can, TCAN_MSG_DATALOGGER_LIGHTS, buf);
     }
 
+    if (tcan_tx_due(&l_can, TCAN_MSG_DATALOGGER_STATUS)) {
+        struct trackcan_data_logger_status_t st;
+        k_spinlock_key_t skey = k_spin_lock(&l_lock);
+
+        st.log_mode = (uint8_t)l_logger_mode;
+        st.card_state = (uint8_t)l_logger_card;
+        k_spin_unlock(&l_lock, skey);
+        if (trackcan_data_logger_status_pack(buf, &st, sizeof(buf)) > 0) {
+            (void)tcan_tx(&l_can, TCAN_MSG_DATALOGGER_STATUS, buf);
+        }
+    }
+
     if (tcan_tx_due(&l_can, TCAN_MSG_HEARTBEAT_DATALOGGER)) {
         struct trackcan_heartbeat_data_logger_t hb = {.status = 0,
                                                       .counter = l_heartbeat_counter++};
@@ -191,6 +214,7 @@ static void can_thread(void *p1, void *p2, void *p3)
     ARG_UNUSED(p3);
 
     (void)tcan_init(&l_can, &l_port, TCAN_NODE_DATALOGGER);
+    seg_button_init(&l_btn, BUTTON_DEBOUNCE_MS, BUTTON_STALE_MS);
 
     /* A missing transceiver or bus must never stop the rest of the firmware: keep retrying. */
     while (can_bring_up() != 0) {
@@ -198,6 +222,7 @@ static void can_thread(void *p1, void *p2, void *p3)
         k_msleep(CAN_INIT_RETRY_MS);
     }
     LOG_INF("TrackCAN up on %s", l_can_dev->name);
+    l_can_up = true;
 
     uint32_t last_status_ms = k_uptime_get_32();
 
@@ -206,6 +231,19 @@ static void can_thread(void *p1, void *p2, void *p3)
 
         tcan_poll(&l_can);
         k_spin_unlock(&l_lock, key);
+
+        /* The button: act only on a NEW Logger_Control frame (a changed receive time), never on the cached last one, so frames that stop are noticed. */
+        {
+            uint32_t now = k_uptime_get_32();
+
+            if (l_can.rx_seen[TCAN_MSG_LOGGER_CONTROL] && l_can.rx_ms[TCAN_MSG_LOGGER_CONTROL] != l_btn_last_rx_ms) {
+                l_btn_last_rx_ms = l_can.rx_ms[TCAN_MSG_LOGGER_CONTROL];
+                if (seg_button_frame(&l_btn, (l_can.rx_data[TCAN_MSG_LOGGER_CONTROL][0] & 1u) != 0u, now) && l_btn_cb != NULL) {
+                    l_btn_cb();
+                }
+            }
+            seg_button_tick(&l_btn, now);
+        }
 
         publish();
         if ((uint32_t)(k_uptime_get_32() - last_status_ms) >= CAN_STATUS_MS) {
@@ -241,6 +279,20 @@ int datalogger_can_status(int *state, unsigned *tx_err, unsigned *rx_err)
     return ret;
 }
 
+void datalogger_can_set_button_cb(datalogger_can_button_cb_t cb)
+{
+    l_btn_cb = cb;
+}
+
+void datalogger_can_set_logger_status(unsigned mode, unsigned card_state)
+{
+    k_spinlock_key_t key = k_spin_lock(&l_lock);
+
+    l_logger_mode = mode & 0x3u;
+    l_logger_card = card_state & 0x3u;
+    k_spin_unlock(&l_lock, key);
+}
+
 void datalogger_can_set_tap(datalogger_can_tap_t tap)
 {
     l_tap = tap;
@@ -262,3 +314,38 @@ tcan_rx_state_t datalogger_can_get(tcan_msg_t msg, uint8_t data[TCAN_MAX_DLC])
     k_spin_unlock(&l_lock, key);
     return state;
 }
+
+#ifdef DATALOGGER_CAN_BENCH_BUTTON
+/*
+ * BENCH ONLY (needs DATALOGGER_CAN_LOOPBACK): plays a button on the bus, so the whole path (frame, edge logic, mode switch, file switch) can be tested
+ * with no button hardware. Logger_Control level frames every 100 ms; the button is down for 500 ms at 20 s, 50 s and 80 s after start.
+ */
+static const uint32_t k_press_at_ms[] = {20000u, 50000u, 80000u};
+
+static void bench_button_thread(void *p1, void *p2, void *p3)
+{
+    ARG_UNUSED(p1);
+    ARG_UNUSED(p2);
+    ARG_UNUSED(p3);
+
+    while (!l_can_up) {
+        k_msleep(100);
+    }
+    for (;;) {
+        uint32_t t = k_uptime_get_32();
+        bool down = false;
+        struct can_frame f = {.id = TRACKCAN_LOGGER_CONTROL_FRAME_ID, .dlc = 1};
+
+        for (unsigned i = 0; i < ARRAY_SIZE(k_press_at_ms); i++) {
+            if (t >= k_press_at_ms[i] && t < k_press_at_ms[i] + 500u) {
+                down = true;
+            }
+        }
+        f.data[0] = down ? 1u : 0u;
+        (void)can_send(l_can_dev, &f, K_NO_WAIT, NULL, NULL);
+        k_msleep(100);
+    }
+}
+
+K_THREAD_DEFINE(bench_button, 1024, bench_button_thread, NULL, NULL, NULL, 8, 0, 0);
+#endif

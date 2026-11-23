@@ -22,6 +22,7 @@
 
 #include "datalogger.h"
 #include "logger_core.h"
+#include "logger_segments.h"
 
 LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
 
@@ -54,6 +55,31 @@ LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
 #define ROTATE_MAX_AGE_MS ((uint32_t)DATALOGGER_SD_ROTATE_SECONDS * 1000u)
 #define ROTATE_MAX_BYTES ((uint32_t)DATALOGGER_SD_ROTATE_KB * 1024u)
 
+/* Two modes (TCAN-20). Daily: about one frame per CAN ID per second, always on. High-res (manual): every frame, from a button press received
+ * over CAN to the next press or an automatic stop. The manual files use the rotation limits above, the daily files their own. */
+#ifndef DATALOGGER_SD_DAILY_ROTATE_SECONDS
+#define DATALOGGER_SD_DAILY_ROTATE_SECONDS 3600
+#endif
+#ifndef DATALOGGER_SD_DAILY_ROTATE_KB
+#define DATALOGGER_SD_DAILY_ROTATE_KB 30720
+#endif
+#ifndef DATALOGGER_SD_DAILY_QUOTA_MB
+#define DATALOGGER_SD_DAILY_QUOTA_MB 4096 /* the space each family's ring may use; when over, the family deletes its own oldest file */
+#endif
+#ifndef DATALOGGER_SD_MANUAL_QUOTA_MB
+#define DATALOGGER_SD_MANUAL_QUOTA_MB 8192
+#endif
+#ifndef DATALOGGER_SD_MANUAL_MAX_SECONDS
+#define DATALOGGER_SD_MANUAL_MAX_SECONDS 600 /* high-res logging stops by itself after this long; 0 = never */
+#endif
+#ifndef DATALOGGER_SD_START_MANUAL
+#define DATALOGGER_SD_START_MANUAL 0 /* bench only: start in high-res mode, as if the button had been pressed at power-up */
+#endif
+#define DAILY_INTERVAL_MS 1000u
+#define BUTTON_DEBOUNCE_MS 300u
+#define BUTTON_STALE_MS 400u /* the button frame comes every 100 ms; this many ms without one and the button is forgotten */
+#define MAX_DELETES_PER_CALL 8
+
 /*******************************************************
  * Type Definitions
  *******************************************************/
@@ -73,7 +99,15 @@ static const struct gpio_dt_spec l_led = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios)
 
 K_MSGQ_DEFINE(l_queue, sizeof(struct rec), QUEUE_LEN, 4);
 
-static FATFS l_fat;
+/*
+ * Every buffer the SD controller reads into or writes from by DMA lives in non-cacheable memory and starts on a cache line. The NXP driver
+ * invalidates the data cache over a receive buffer after each read, and the invalidation is rounded out to whole 32-byte lines: any variable
+ * that shares an edge line with the buffer loses its latest, unwritten value. Found the hard way (TCAN-20): the FatFS window ends inside a
+ * line shared with a file object, a fresh fs_open() was undone by a directory scan on another thread, and the pool of file objects leaked.
+ * The FatFS object holds the window, so it is placed here as a whole.
+ */
+#define DMA_ALIGN CONFIG_DCACHE_LINE_SIZE
+static FATFS l_fat __nocache __aligned(DMA_ALIGN);
 static struct fs_mount_t l_mount = {
 	.type = FS_FATFS,
 	.fs_data = &l_fat,
@@ -81,7 +115,7 @@ static struct fs_mount_t l_mount = {
 };
 static struct fs_file_t l_file;
 
-static char l_buf[BUF_SIZE];
+static char l_buf[BUF_SIZE] __nocache __aligned(DMA_ALIGN);
 static size_t l_len;
 static logger_policy_t l_policy;
 
@@ -91,9 +125,15 @@ static uint32_t l_lines;
 static uint32_t l_bytes;
 static uint32_t l_last_sync_ms;
 static uint32_t l_last_card_ms; /* the last time the card was written, synced or probed */
-static uint8_t l_probe_buf[512] __aligned(4);
+static uint8_t l_probe_buf[512] __nocache __aligned(DMA_ALIGN);
 static unsigned l_number;        /* the number of the file now open */
+static seg_family_t l_family;    /* and its family: daily (Dnnnnnnn.CSV) or manual (Mnnnnnnn.CSV) */
 static logger_rotation_t l_rot;
+static seg_mode_ctl_t l_modectl;
+static seg_decim_t l_decim;
+static atomic_t l_toggle_req;    /* set by the CAN thread on each accepted button press */
+static K_MUTEX_DEFINE(l_serve_lock); /* held by the USB copy while it reads a file: the ring never deletes under it */
+static uint32_t l_skipped;       /* daily mode: frames not written because their ID was written less than a second ago */
 static uint32_t l_rolls;
 /* Timing diagnostics (cheap, always on): the slowest card write and sync and the fullest the queue got since the last report. */
 static uint32_t l_write_max_us;
@@ -110,6 +150,12 @@ static struct k_thread l_thread;
 /*******************************************************
  * Static Function Definitions
  *******************************************************/
+/* What the DataLogger_Status CAN message reports: the mode (0 daily, 1 high-res) and the card state (0 starting, 1 no card, 2 error, 3 logging). */
+static void publish_status(void)
+{
+	datalogger_can_set_logger_status(l_modectl.mode == SEG_MODE_MANUAL ? 1u : 0u, (unsigned)atomic_get(&l_state));
+}
+
 static void set_state(sd_logger_state_t s)
 {
 	if ((sd_logger_state_t)atomic_get(&l_state) != s)
@@ -118,7 +164,42 @@ static void set_state(sd_logger_state_t s)
 
 		LOG_INF("SD logger: %s", names[s]);
 		atomic_set(&l_state, s);
+		publish_status();
 	}
+}
+
+/* Applies a button press and the high-res time limit. Returns true when the mode changed. The CAN thread only sets the request flag. */
+static bool poll_mode(uint32_t now_ms)
+{
+	bool changed = false;
+
+	if (atomic_cas(&l_toggle_req, 1, 0))
+	{
+		seg_mode_toggle(&l_modectl, now_ms);
+		LOG_INF("button: %s logging", l_modectl.mode == SEG_MODE_MANUAL ? "high-res" : "daily");
+		changed = true;
+	}
+	if (seg_mode_tick(&l_modectl, now_ms))
+	{
+		LOG_INF("high-res logging ended by its time limit: back to daily");
+		changed = true;
+	}
+	if (changed)
+	{
+		publish_status();
+	}
+	return changed;
+}
+
+/* The button callback (CAN thread): one accepted press. It must not block, so it only raises the flag. */
+static void button_pressed(void)
+{
+	atomic_set(&l_toggle_req, 1);
+}
+
+static seg_family_t family_for_mode(void)
+{
+	return l_modectl.mode == SEG_MODE_MANUAL ? SEG_MANUAL : SEG_DAILY;
 }
 
 /* The status LED: slow blink = logging, fast blink = no card, steady on = error. */
@@ -129,7 +210,8 @@ static void led_update(uint32_t now_ms)
 	switch ((sd_logger_state_t)atomic_get(&l_state))
 	{
 	case SD_LOGGER_LOGGING:
-		on = ((now_ms / 500u) & 1u) == 0u;
+		/* daily: 1 blink a second; high-res: 2 blinks a second (no card is 5) */
+		on = ((now_ms / (l_modectl.mode == SEG_MODE_MANUAL ? 250u : 500u)) & 1u) == 0u;
 		break;
 	case SD_LOGGER_FS_ERROR:
 		on = true;
@@ -147,6 +229,7 @@ static void wait_ms(uint32_t ms)
 	for (uint32_t waited = 0; waited < ms; waited += TICK_MS)
 	{
 		led_update(k_uptime_get_32());
+		(void)poll_mode(k_uptime_get_32()); /* a press while there is no card still changes the mode that will be logged */
 		k_msleep(TICK_MS);
 	}
 }
@@ -270,14 +353,14 @@ static int append(const char *line, size_t n, uint32_t now_ms)
 	return 0;
 }
 
-/* Scans the card for the highest LOGnnnn.CSV, one entry at a time. */
-static int next_log_number(unsigned *number)
+/* Folds the directory's files of one family into *ring, one entry at a time. Only names that match the family exactly are counted. */
+static int scan_family(seg_family_t fam, seg_ring_t *ring)
 {
 	struct fs_dir_t dir;
 	struct fs_dirent ent;
-	unsigned highest = 0;
 	int ret;
 
+	seg_ring_init(ring);
 	fs_dir_t_init(&dir);
 	ret = fs_opendir(&dir, MOUNT_POINT);
 	if (ret < 0)
@@ -286,21 +369,55 @@ static int next_log_number(unsigned *number)
 	}
 	while (fs_readdir(&dir, &ent) == 0 && ent.name[0] != '\0')
 	{
-		if (ent.type == FS_DIR_ENTRY_FILE)
+		unsigned n;
+
+		if (ent.type == FS_DIR_ENTRY_FILE && seg_parse_name(ent.name, fam, &n))
 		{
-			logger_note_file_name(&highest, ent.name);
+			seg_ring_fold(ring, n, (uint32_t)ent.size);
 		}
 	}
 	(void)fs_closedir(&dir);
-	*number = logger_next_number(highest);
 	return 0;
+}
+
+/* The ring: while the family holds more than its quota, delete its OWN oldest file. Never the newest (the open one), never another family's
+ * file, never a file the USB copy is reading. A failure to delete is reported and the logger carries on. */
+static void enforce_quota(seg_family_t fam)
+{
+	const uint64_t quota = (uint64_t)(fam == SEG_MANUAL ? DATALOGGER_SD_MANUAL_QUOTA_MB : DATALOGGER_SD_DAILY_QUOTA_MB) * 1048576ull;
+
+	if (k_mutex_lock(&l_serve_lock, K_NO_WAIT) != 0)
+	{
+		return; /* a file is being copied over USB: try again at the next rollover */
+	}
+	for (int i = 0; i < MAX_DELETES_PER_CALL; i++)
+	{
+		seg_ring_t ring;
+		char name[SEG_FILE_NAME_LEN];
+		char path[sizeof(MOUNT_POINT) + SEG_FILE_NAME_LEN + 1];
+		int ret;
+
+		if (scan_family(fam, &ring) < 0 || !seg_ring_over(&ring, quota) || seg_file_name(name, sizeof(name), fam, ring.lowest) != 0)
+		{
+			break;
+		}
+		(void)snprintf(path, sizeof(path), MOUNT_POINT "/%s", name);
+		ret = fs_unlink(path);
+		if (ret < 0)
+		{
+			LOG_WRN("ring: could not delete %s (%d): over its quota, will try again", path, ret);
+			break;
+		}
+		LOG_INF("ring: deleted the oldest %s (%u bytes) to stay under the quota", name, (unsigned)ring.lowest_bytes);
+	}
+	k_mutex_unlock(&l_serve_lock);
 }
 
 /* Read-only diagnostic after a mount failure: sector count and the first sector's OEM name and signature, so the log says whether
  * the card is exFAT ("EXFAT"), FAT ("MSDOS", "mkfs.fat") or unformatted (zeros), without ever writing to it. */
 static void log_card_identity(void)
 {
-	static uint8_t sector[512];
+	static uint8_t sector[512] __nocache __aligned(DMA_ALIGN);
 	uint32_t count = 0;
 	char oem[9] = {0};
 
@@ -322,16 +439,16 @@ static void log_card_identity(void)
 
 /* Creates LOGnnnn.CSV, writes the header (and, for a rollover, a NOTE naming the file it continues) and syncs. On failure the file is
  * closed, the state is FS_ERROR and the negative error is returned; the caller unmounts. */
-static int start_file(unsigned number, const char *continues)
+static int start_file(seg_family_t fam, unsigned number, const char *continues)
 {
-	char name[LOGGER_FILE_NAME_LEN];
-	char path[sizeof(MOUNT_POINT) + LOGGER_FILE_NAME_LEN + 1];
+	char name[SEG_FILE_NAME_LEN];
+	char path[sizeof(MOUNT_POINT) + SEG_FILE_NAME_LEN + 1];
 	char line[LOGGER_LINE_MAX];
 	const char *header;
 	size_t n;
 	int ret;
 
-	if (logger_file_name(name, sizeof(name), number) != 0)
+	if (seg_file_name(name, sizeof(name), fam, number) != 0)
 	{
 		set_state(SD_LOGGER_FS_ERROR);
 		return -EINVAL;
@@ -367,11 +484,25 @@ static int start_file(unsigned number, const char *continues)
 	l_lines = 0;
 	l_bytes = 0;
 	l_number = number;
+	l_family = fam;
 	logger_policy_init(&l_policy, WRITE_BYTES, WRITE_AGE_MS, SYNC_MS, k_uptime_get_32());
-	logger_rotation_start(&l_rot, ROTATE_MAX_BYTES, ROTATE_MAX_AGE_MS, k_uptime_get_32());
+	if (fam == SEG_MANUAL)
+	{
+		logger_rotation_start(&l_rot, ROTATE_MAX_BYTES, ROTATE_MAX_AGE_MS, k_uptime_get_32());
+	}
+	else
+	{
+		logger_rotation_start(&l_rot, (uint32_t)DATALOGGER_SD_DAILY_ROTATE_KB * 1024u, (uint32_t)DATALOGGER_SD_DAILY_ROTATE_SECONDS * 1000u, k_uptime_get_32());
+	}
 
 	header = logger_csv_header();
 	ret = append(header, strlen(header), k_uptime_get_32());
+	if (ret == 0)
+	{
+		/* Every file says what it is. A daily file is a reduced stream: analysis tools must not expect every frame in it. */
+		n = logger_format_note(line, sizeof(line), k_uptime_get_32(), fam == SEG_MANUAL ? "mode=highres every frame" : "mode=daily one frame per ID per second");
+		ret = n > 0 ? append(line, n, k_uptime_get_32()) : -EINVAL;
+	}
 	if (ret == 0 && continues != NULL)
 	{
 		char text[40];
@@ -409,7 +540,7 @@ static int start_file(unsigned number, const char *continues)
  * is one above the current file's, and 0 (9999 used) stops logging. */
 static int roll_file(void)
 {
-	char prev[LOGGER_FILE_NAME_LEN];
+	char prev[SEG_FILE_NAME_LEN];
 	unsigned next;
 	uint32_t roll_start_ms = k_uptime_get_32();
 	int ret;
@@ -423,20 +554,21 @@ static int roll_file(void)
 	{
 		return ret;
 	}
-	(void)logger_file_name(prev, sizeof(prev), l_number);
+	(void)seg_file_name(prev, sizeof(prev), l_family, l_number);
 	(void)fs_close(&l_file);
 	fs_file_t_init(&l_file);
-	next = logger_next_number(l_number);
+	next = l_number < SEG_FILE_NUMBER_MAX ? l_number + 1u : 0u;
 	if (next == 0)
 	{
 		LOG_ERR("no free log number: stopped rather than overwriting");
 		set_state(SD_LOGGER_FS_ERROR);
 		return -ENOSPC;
 	}
-	ret = start_file(next, prev);
+	ret = start_file(l_family, next, prev);
 	if (ret == 0)
 	{
 		l_rolls++;
+		enforce_quota(l_family);
 	}
 	{
 		uint32_t ms = k_uptime_get_32() - roll_start_ms;
@@ -445,6 +577,45 @@ static int roll_file(void)
 		{
 			LOG_WRN("slow rollover: %u ms (%u frames queued meanwhile)", (unsigned)ms, (unsigned)k_msgq_num_used_get(&l_queue));
 		}
+	}
+	return ret;
+}
+
+/* A mode change: close the current file cleanly and continue in the other family's next file. Frames that arrive meanwhile wait in the queue. */
+static int switch_family(seg_family_t fam)
+{
+	seg_ring_t ring;
+	unsigned next;
+	int ret;
+
+	ret = flush_buffer();
+	if (ret == 0)
+	{
+		ret = fs_sync(&l_file);
+	}
+	if (ret < 0)
+	{
+		return ret;
+	}
+	(void)fs_close(&l_file);
+	fs_file_t_init(&l_file);
+	ret = scan_family(fam, &ring);
+	if (ret < 0)
+	{
+		return ret;
+	}
+	next = seg_ring_next_number(&ring);
+	if (next == 0)
+	{
+		LOG_ERR("no free %s file number: stopped rather than overwriting", fam == SEG_MANUAL ? "high-res" : "daily");
+		set_state(SD_LOGGER_FS_ERROR);
+		return -ENOSPC;
+	}
+	enforce_quota(fam);
+	ret = start_file(fam, next, NULL);
+	if (ret == 0)
+	{
+		l_rolls++;
 	}
 	return ret;
 }
@@ -471,7 +642,12 @@ static int open_log(void)
 		set_state(SD_LOGGER_FS_ERROR);
 		return ret;
 	}
-	ret = next_log_number(&number);
+	{
+		seg_ring_t ring;
+
+		ret = scan_family(family_for_mode(), &ring);
+		number = ret < 0 ? 0u : seg_ring_next_number(&ring);
+	}
 	if (ret < 0 || number == 0)
 	{
 		LOG_ERR("no free log number (%d): nothing is written rather than overwriting", ret);
@@ -479,7 +655,8 @@ static int open_log(void)
 		set_state(SD_LOGGER_FS_ERROR);
 		return ret < 0 ? ret : -ENOSPC;
 	}
-	ret = start_file(number, NULL);
+	enforce_quota(family_for_mode());
+	ret = start_file(family_for_mode(), number, NULL);
 	if (ret < 0)
 	{
 		(void)fs_unmount(&l_mount);
@@ -493,6 +670,17 @@ static void close_log(void)
 	(void)fs_close(&l_file);
 	(void)fs_unmount(&l_mount);
 	(void)disk_access_ioctl(DISK_NAME, DISK_IOCTL_CTRL_DEINIT, NULL);
+}
+
+/* Daily mode keeps about one frame per (direction, CAN ID) per second; high-res keeps every frame. */
+static bool frame_wanted(const struct rec *r)
+{
+	if (l_modectl.mode == SEG_MODE_MANUAL || seg_decim_keep(&l_decim, r->tx != 0u, r->id, r->t_ms, DAILY_INTERVAL_MS))
+	{
+		return true;
+	}
+	l_skipped++;
+	return false;
 }
 
 /* Writes frames until something fails. Returns the negative error. */
@@ -518,6 +706,10 @@ static int run_logging(void)
 			/* Deliberate stop: write out what is queued and buffered, sync, and report it. */
 			while (ret == 0 && k_msgq_get(&l_queue, &r, K_NO_WAIT) == 0)
 			{
+				if (!frame_wanted(&r))
+				{
+					continue;
+				}
 				n = logger_format_frame(
 					line, sizeof(line), r.t_ms, r.tx ? LOGGER_DIR_TX : LOGGER_DIR_RX, r.id, r.dlc, r.data);
 				ret = n > 0 ? append(line, n, k_uptime_get_32()) : 0;
@@ -535,7 +727,7 @@ static int run_logging(void)
 			return ret == 0 ? SD_STOPPED : ret;
 		}
 
-		if (k_msgq_get(&l_queue, &r, K_MSEC(TICK_MS)) == 0)
+		if (k_msgq_get(&l_queue, &r, K_MSEC(TICK_MS)) == 0 && frame_wanted(&r))
 		{
 			n = logger_format_frame(
 				line, sizeof(line), r.t_ms, r.tx ? LOGGER_DIR_TX : LOGGER_DIR_RX, r.id, r.dlc, r.data);
@@ -547,6 +739,13 @@ static int run_logging(void)
 		}
 		now = k_uptime_get_32();
 		led_update(now);
+		if (ret == 0 && poll_mode(now) && l_family != family_for_mode())
+		{
+			ret = switch_family(family_for_mode());
+			/* The new file was opened a moment AFTER the time read above. Leaving `now` as it was makes the new file's age negative, which the
+			 * wrap-safe unsigned subtraction reads as a huge age: the rotation check below would roll the file again at once. */
+			now = k_uptime_get_32();
+		}
 		{
 			uint32_t used = k_msgq_num_used_get(&l_queue);
 
@@ -640,6 +839,7 @@ static int run_logging(void)
 		if (ret == 0 && logger_rotation_due(&l_rot, now))
 		{
 			ret = roll_file();
+			now = k_uptime_get_32(); /* the new file opened after `now`: see above */
 		}
 		if ((uint32_t)(now - last_status_ms) >= STATUS_LOG_MS)
 		{
@@ -647,7 +847,7 @@ static int run_logging(void)
 			unsigned can_tec = 0, can_rec = 0;
 
 			(void)datalogger_can_status(&can_state, &can_tec, &can_rec);
-			LOG_INF("logged %u lines, %u bytes, %ld dropped, can state %d tec %u rec %u, last sync %u ms ago, qmax %u, wmax %u ms, smax %u ms",
+			LOG_INF("logged %u lines, %u bytes, %ld dropped, can state %d tec %u rec %u, last sync %u ms ago, qmax %u, wmax %u ms, smax %u ms, %s, skipped %u",
 					(unsigned)l_lines,
 					(unsigned)l_bytes,
 					(long)atomic_get(&l_dropped),
@@ -657,7 +857,9 @@ static int run_logging(void)
 					(unsigned)(now - l_last_sync_ms),
 					(unsigned)l_queue_max,
 					(unsigned)(l_write_max_us / 1000u),
-					(unsigned)(l_sync_max_us / 1000u));
+					(unsigned)(l_sync_max_us / 1000u),
+					l_modectl.mode == SEG_MODE_MANUAL ? "high-res" : "daily",
+					(unsigned)l_skipped);
 			l_queue_max = 0;
 			l_write_max_us = 0;
 			l_sync_max_us = 0;
@@ -708,6 +910,12 @@ static void logger_thread(void *p1, void *p2, void *p3)
  *******************************************************/
 void sd_logger_start(void)
 {
+	seg_mode_init(&l_modectl, (uint32_t)DATALOGGER_SD_MANUAL_MAX_SECONDS * 1000u);
+	seg_decim_init(&l_decim);
+#if DATALOGGER_SD_START_MANUAL
+	seg_mode_toggle(&l_modectl, k_uptime_get_32()); /* bench: as if the button had been pressed at power-up */
+#endif
+	datalogger_can_set_button_cb(button_pressed);
 	datalogger_can_set_tap(tap);
 	k_thread_create(&l_thread,
 					l_stack,
@@ -742,7 +950,22 @@ sd_logger_state_t sd_logger_state(void)
 	return (sd_logger_state_t)atomic_get(&l_state);
 }
 
-unsigned sd_logger_open_number(void)
+bool sd_logger_open_file(char *name, size_t size)
 {
-	return sd_logger_state() == SD_LOGGER_LOGGING ? l_number : 0u;
+	if (sd_logger_state() != SD_LOGGER_LOGGING)
+	{
+		return false;
+	}
+	return seg_file_name(name, size, l_family, l_number) == 0;
 }
+
+void sd_logger_serving_lock(void)
+{
+	(void)k_mutex_lock(&l_serve_lock, K_FOREVER);
+}
+
+void sd_logger_serving_unlock(void)
+{
+	k_mutex_unlock(&l_serve_lock);
+}
+

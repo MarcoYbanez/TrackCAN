@@ -57,4 +57,18 @@ void datalogger_can_set_tap(datalogger_can_tap_t tap);
  */
 int datalogger_can_status(int *state, unsigned *tx_err, unsigned *rx_err);
 
+/*
+ * The logging button (TCAN-20): the Logger_Control message (0x400, LogButton bit) arrives from some node on the bus, source TBD. This calls cb from
+ * the CAN thread on each ACCEPTED press: a rising edge of the level, debounced, and never from a button that was already down when the frames
+ * started (or resumed after they stopped). cb must not block. Pass NULL to remove it.
+ */
+typedef void (*datalogger_can_button_cb_t)(void);
+void datalogger_can_set_button_cb(datalogger_can_button_cb_t cb);
+
+/*
+ * What the DataLogger_Status message (0x202) reports, sent every 200 ms: mode 0 daily, 1 high-res; card state 0 starting, 1 no card, 2 error,
+ * 3 logging. Thread-safe.
+ */
+void datalogger_can_set_logger_status(unsigned mode, unsigned card_state);
+
 #endif /* DATALOGGER_CAN_H */

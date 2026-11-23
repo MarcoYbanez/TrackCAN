@@ -70,7 +70,34 @@ def flood_chain(seq_break):
     return [("LOG0001.CSV", a), ("LOG0002.CSV", b)]
 
 
+def daily(rows, name="D0000001.CSV"):
+    """A daily file: rows are (t, dir, id_hex, data_hex)."""
+    lines = ["t_ms,dir,id,dlc,data", "1,NOTE,,,start", "1,NOTE,,,mode=daily one frame per ID per second", "1,NOTE,,,mode=loopback bench data"]
+    lines += [f"{t},{d},{i},{len(x) // 2},{x}" for t, d, i, x in rows]
+    return [(name, lines)]
+
+
+def rotated(first, second):
+    """Two rotated files with the given names (a continues= NOTE in the second)."""
+    a = ["t_ms,dir,id,dlc,data", "1,NOTE,,,mode=highres every frame", "1,NOTE,,,mode=loopback bench data", "10,TX,702,2,0000"]
+    b = ["t_ms,dir,id,dlc,data", f"20,NOTE,,,continues={first}", "20,NOTE,,,mode=highres every frame", "20,NOTE,,,mode=loopback bench data", "30,TX,702,2,0001"]
+    return [(first, a), (second, b)]
+
+
 CASES = [  # (name, lines, expected exit code: 0 pass, 1 fail)
+    ("daily: one frame per ID per second", daily([(1000, "TX", "200", "00"), (1500, "TX", "201", "00"), (2000, "TX", "200", "00")]), 0),
+    ("daily: exactly 1000 ms apart", daily([(1000, "TX", "200", "00"), (2000, "TX", "200", "00")]), 0),
+    ("daily: 998 ms apart (inside the 2 ms jitter)", daily([(1000, "TX", "200", "00"), (1998, "TX", "200", "00")]), 0),
+    ("daily: 997 ms apart is too dense", daily([(1000, "TX", "200", "00"), (1997, "TX", "200", "00")]), 1),
+    ("daily: the same ID 500 ms apart", daily([(1000, "TX", "200", "00"), (1500, "TX", "200", "00")]), 1),
+    ("daily: TX and RX of one ID are separate streams", daily([(1000, "TX", "200", "00"), (1010, "RX", "200", "00")]), 0),
+    ("daily: heartbeat gaps and loopback pairing are not expected", daily([(1000, "TX", "702", "0000"), (2000, "TX", "702", "0005"), (3000, "TX", "702", "0009")]), 0),
+    ("daily: flood sequence gaps are expected in a reduced stream", daily([(1000, "TX", "7F0", "00000000"), (2000, "TX", "7F0", "00000064"), (3000, "TX", "7F0", "000000FA")]), 0),
+    ("high-res: the same heartbeat gaps ARE a failure", [("LOG0001.CSV", ["t_ms,dir,id,dlc,data", "1,NOTE,,,mode=loopback bench data", "1,NOTE,,,mode=highres every frame", "10,TX,702,2,0000", "10,RX,702,2,0000", "20,TX,702,2,0005", "20,RX,702,2,0005"])], 1),
+    ("new names: D files in order", rotated("D0000001.CSV", "D0000002.CSV"), 0),
+    ("new names: M files in order", rotated("M0000041.CSV", "M0000042.CSV"), 0),
+    ("new names: a D file is not the next after a gap", rotated("D0000001.CSV", "D0000003.CSV"), 1),
+    ("new names: 7-digit rollover 9999999 -> 10000000 is not a valid name", rotated("M0000008.CSV", "M0000010.CSV"), 1),
     ("rotated log: two files in order", chain(), 0),
     ("rotated log: next file is not number+1", chain(second_name="LOG0003.CSV"), 1),
     ("rotated log: no continues= note", chain(note2=None), 1),
@@ -94,6 +121,7 @@ CASES = [  # (name, lines, expected exit code: 0 pass, 1 fail)
     ("loopback TX without RX", [x for x in good_log() if not x.startswith(("510,RX", "560,RX", "610,RX", "660,RX"))], 1),
     ("loopback log without its NOTE", [x for x in good_log() if "loopback" not in x], 1),
     ("flood frames are TX only", good_log() + ["2000,TX,7F0,4,00000000", "2001,TX,7F0,4,00000001"], 0),
+    ("bench button frames are RX only", good_log() + ["2000,RX,400,1,00", "2100,RX,400,1,01", "2200,RX,400,1,01", "2300,RX,400,1,00"], 0),
     ("flood sequence gap, silent", good_log() + ["2000,TX,7F0,4,00000000", "2001,TX,7F0,4,00000005"], 1),
 ]
 

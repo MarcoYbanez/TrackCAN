@@ -42,6 +42,12 @@ static const tcan_msg_info_t l_msgs[TCAN_MSG_COUNT] = {
     [TCAN_MSG_HEARTBEAT_ETHANOL] = {TRACKCAN_HEARTBEAT_ETHANOL_FRAME_ID,
                                     TRACKCAN_HEARTBEAT_ETHANOL_LENGTH,
                                     TRACKCAN_HEARTBEAT_ETHANOL_CYCLE_TIME_MS, TCAN_NODE_ETHANOL},
+    [TCAN_MSG_DATALOGGER_STATUS] = {TRACKCAN_DATA_LOGGER_STATUS_FRAME_ID,
+                                    TRACKCAN_DATA_LOGGER_STATUS_LENGTH,
+                                    TRACKCAN_DATA_LOGGER_STATUS_CYCLE_TIME_MS,
+                                    TCAN_NODE_DATALOGGER},
+    [TCAN_MSG_LOGGER_CONTROL] = {TRACKCAN_LOGGER_CONTROL_FRAME_ID, TRACKCAN_LOGGER_CONTROL_LENGTH,
+                                 TRACKCAN_LOGGER_CONTROL_CYCLE_TIME_MS, TCAN_NODE_CONTROLLER},
 };
 
 /*******************************************************
