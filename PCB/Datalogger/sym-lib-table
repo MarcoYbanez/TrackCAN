@@ -1,0 +1,5 @@
+(sym_lib_table
+  (version 7)
+
+  (lib (name "Teensy41") (type "KiCad") (uri "${KIPRJMOD}/lib/Teensy41.kicad_sym") (options "") (descr ""))
+  (lib (name "trackcan") (type "KiCad") (uri "${KIPRJMOD}/lib/trackcan.kicad_sym") (options "") (descr "")))
