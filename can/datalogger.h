@@ -51,4 +51,10 @@ tcan_rx_state_t datalogger_can_get(tcan_msg_t msg, uint8_t data[TCAN_MAX_DLC]);
 typedef void (*datalogger_can_tap_t)(bool tx, const tcan_frame_t *frame);
 void datalogger_can_set_tap(datalogger_can_tap_t tap);
 
+/*
+ * Controller diagnostics for the logger's status line. state is the Zephyr can_state value (0 error-active, 1 warning, 2 error-passive,
+ * 3 bus-off, 4 stopped). Returns 0, or a negative errno if the controller is not ready.
+ */
+int datalogger_can_status(int *state, unsigned *tx_err, unsigned *rx_err);
+
 #endif /* DATALOGGER_CAN_H */

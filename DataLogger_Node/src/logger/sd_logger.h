@@ -11,6 +11,9 @@
 #ifndef SD_LOGGER_H
 #define SD_LOGGER_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 /*******************************************************
  * Type Definitions
  *******************************************************/
@@ -30,5 +33,11 @@ typedef enum
 void sd_logger_start(void);
 
 sd_logger_state_t sd_logger_state(void);
+
+/*
+ * Before a deliberate reboot (TCAN-18): drains the queue, writes the buffer, syncs and closes the file, and stops the logger for good.
+ * Waits at most timeout_ms. Returns true if the file was closed cleanly (or there was nothing open), false on timeout.
+ */
+bool sd_logger_prepare_reboot(uint32_t timeout_ms);
 
 #endif /* SD_LOGGER_H */

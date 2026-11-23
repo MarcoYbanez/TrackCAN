@@ -16,6 +16,9 @@
 
 #include "bootloader_control.h"
 #include "bootloader_request.h"
+#ifndef DATALOGGER_NO_SD
+#include "sd_logger.h"
+#endif
 
 LOG_MODULE_REGISTER(bootloader_control, LOG_LEVEL_INF);
 
@@ -23,6 +26,7 @@ LOG_MODULE_REGISTER(bootloader_control, LOG_LEVEL_INF);
  * Macros
  *******************************************************/
 #define POLL_MS 10
+#define LOGGER_CLOSE_TIMEOUT_MS 500 /* the most to wait for the SD log to be closed; then reboot anyway */
 #define USB_SERIAL DT_NODELABEL(usb_serial)
 /* PJRC's own check (usb.c:243): bit 1 of OCOTP CFG5 set means a secure-locked chip, where PJRC uses a different path. This
  * firmware does not implement that path, so it refuses instead of guessing. */
@@ -44,6 +48,12 @@ static void enter_bootloader(void)
         LOG_ERR("secure-locked chip: bootloader entry not implemented, use the PROGRAM button");
         return;
     }
+#ifndef DATALOGGER_NO_SD
+    /* Close the log cleanly first: a reboot mid-write would leave the file system dirty. Bounded, so a hung card cannot block recovery. */
+    if (!sd_logger_prepare_reboot(LOGGER_CLOSE_TIMEOUT_MS)) {
+        LOG_WRN("SD log not closed in time, rebooting anyway");
+    }
+#endif
     LOG_INF("rebooting into the programming bootloader");
     LOG_PANIC(); /* flush pending log output */
     (void)irq_lock(); /* the same as PJRC: nothing may run between here and the trap */

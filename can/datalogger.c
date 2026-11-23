@@ -135,6 +135,13 @@ static int can_bring_up(void)
         }
         filter_added = true;
     }
+#ifdef DATALOGGER_CAN_LOOPBACK
+    /* Bench only: the controller talks to itself, so no other node is needed to acknowledge frames. Allowed while stopped. */
+    ret = can_set_mode(l_can_dev, CAN_MODE_LOOPBACK);
+    if (ret < 0) {
+        return ret;
+    }
+#endif
     return can_start(l_can_dev);
 }
 
@@ -205,6 +212,24 @@ static void can_thread(void *p1, void *p2, void *p3)
 /*******************************************************
  * Public Function Definitions
  *******************************************************/
+int datalogger_can_status(int *state, unsigned *tx_err, unsigned *rx_err)
+{
+    enum can_state st;
+    struct can_bus_err_cnt cnt;
+    int ret;
+
+    if (!device_is_ready(l_can_dev)) {
+        return -ENODEV;
+    }
+    ret = can_get_state(l_can_dev, &st, &cnt);
+    if (ret == 0) {
+        *state = (int)st;
+        *tx_err = cnt.tx_err_cnt;
+        *rx_err = cnt.rx_err_cnt;
+    }
+    return ret;
+}
+
 void datalogger_can_set_tap(datalogger_can_tap_t tap)
 {
     l_tap = tap;

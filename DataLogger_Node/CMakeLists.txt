@@ -15,6 +15,8 @@ option(DATALOGGER_SD "Build the SD card logger" ON)
 # The TrackCAN node logic. -DDATALOGGER_CAN=OFF builds the original bring-up scaffold without it (with CONFIG_CAN=n), a control for
 # telling a problem in the CAN driver from a problem elsewhere.
 option(DATALOGGER_CAN "Build the TrackCAN CAN logic" ON)
+# Bench only: the CAN controller runs in internal loopback, so a lone Node produces steady traffic. The log says so (a NOTE line).
+option(DATALOGGER_CAN_LOOPBACK "CAN controller in loopback (bench)" OFF)
 
 target_sources(app PRIVATE
 	src/main.c
@@ -37,6 +39,15 @@ target_include_directories(app PRIVATE
 	${TRACKCAN_PATH}/can/common
 	${TRACKCAN_PATH}/can/generated
 )
+
+if(DATALOGGER_CAN_LOOPBACK)
+	target_compile_definitions(app PRIVATE DATALOGGER_CAN_LOOPBACK=1)
+endif()
+# Bench only: a rising-rate frame generator into the SD logger queue, to find where frames start to drop.
+option(DATALOGGER_SD_BENCH_FLOOD "SD logger flood generator (bench)" OFF)
+if(DATALOGGER_SD_BENCH_FLOOD)
+	target_compile_definitions(app PRIVATE DATALOGGER_SD_BENCH_FLOOD=1)
+endif()
 
 if(DATALOGGER_SD)
 	target_sources(app PRIVATE

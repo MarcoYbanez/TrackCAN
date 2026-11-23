@@ -32,7 +32,7 @@ LOG_MODULE_REGISTER(sd_logger, LOG_LEVEL_INF);
 #define MOUNT_POINT "/SD:"
 #define THREAD_STACK_SIZE 4096
 #define THREAD_PRIORITY 10 /* below the CAN thread (7): logging never delays the bus */
-#define QUEUE_LEN 64
+#define QUEUE_LEN 256 /* frames queued while the file opens (about 1 s) or the card stalls */
 #define BUF_SIZE 2048
 #define WRITE_BYTES 1024
 #define WRITE_AGE_MS 250
@@ -76,6 +76,10 @@ static atomic_t l_dropped;
 static atomic_t l_state = ATOMIC_INIT(SD_LOGGER_STARTING);
 static uint32_t l_lines;
 static uint32_t l_bytes;
+static uint32_t l_last_sync_ms;
+static atomic_t l_stop;                /* set by sd_logger_prepare_reboot */
+static K_SEM_DEFINE(l_stopped, 0, 1);  /* given when the file is closed */
+#define SD_STOPPED 1                   /* run_logging's return value for a deliberate stop */
 
 K_THREAD_STACK_DEFINE(l_stack, THREAD_STACK_SIZE);
 static struct k_thread l_thread;
@@ -140,6 +144,51 @@ static void tap(bool tx, const tcan_frame_t *f)
 		(void)atomic_inc(&l_dropped);
 	}
 }
+
+#ifdef DATALOGGER_SD_BENCH_FLOOD
+/* BENCH ONLY: pushes frames straight into the logger's queue at a rising rate, to find where the SD writes start dropping them. Frame
+ * 0x7F0 carries a sequence number (so a gap in the file is a lost frame); frame 0x7FF marks each rate step. The log says it is bench data. */
+#define FLOOD_STEP_MS 20000
+static const uint16_t k_flood_rates[] = { 250, 500, 1000, 2000, 4000, 8000 };
+K_THREAD_STACK_DEFINE(l_flood_stack, 1024);
+static struct k_thread l_flood_thread;
+
+static void flood_thread(void *p1, void *p2, void *p3)
+{
+	ARG_UNUSED(p1);
+	ARG_UNUSED(p2);
+	ARG_UNUSED(p3);
+	uint32_t seq = 0;
+
+	k_msleep(3000); /* let the file open first */
+	for (unsigned step = 0; step < ARRAY_SIZE(k_flood_rates); step++)
+	{
+		tcan_frame_t mark = { .id = 0x7FF, .dlc = 2, .data = { (uint8_t)(k_flood_rates[step] >> 8), (uint8_t)k_flood_rates[step] } };
+		uint32_t milli_frames = 0;
+
+		tap(true, &mark);
+		LOG_INF("FLOOD rate %u frames/s", (unsigned)k_flood_rates[step]);
+		for (uint32_t ms = 0; ms < FLOOD_STEP_MS; ms++)
+		{
+			milli_frames += k_flood_rates[step];
+			while (milli_frames >= 1000u)
+			{
+				tcan_frame_t f = { .id = 0x7F0, .dlc = 4 };
+
+				f.data[0] = (uint8_t)(seq >> 24);
+				f.data[1] = (uint8_t)(seq >> 16);
+				f.data[2] = (uint8_t)(seq >> 8);
+				f.data[3] = (uint8_t)seq;
+				seq++;
+				tap(true, &f);
+				milli_frames -= 1000u;
+			}
+			k_msleep(1);
+		}
+	}
+	LOG_INF("FLOOD done");
+}
+#endif
 
 /* Appends a formatted line to the buffer, writing the buffer out first if the line would not fit. Returns 0 or a negative error. */
 static int flush_buffer(void)
@@ -312,11 +361,41 @@ static int run_logging(void)
 
 	n = logger_format_note(line, sizeof(line), last_note_ms, "start");
 	ret = n > 0 ? append(line, n, last_note_ms) : 0;
+#if defined(DATALOGGER_CAN_LOOPBACK) || defined(DATALOGGER_SD_BENCH_FLOOD)
+	/* Bench data must never pass for car data (the same rule as the dash's DEMO flag). */
+	n = logger_format_note(line, sizeof(line), last_note_ms, "mode=loopback bench data");
+	if (ret == 0 && n > 0)
+	{
+		ret = append(line, n, last_note_ms);
+	}
+#endif
 
 	while (ret == 0)
 	{
 		struct rec r;
 		uint32_t now;
+
+		if (atomic_get(&l_stop) != 0)
+		{
+			/* Deliberate stop: write out what is queued and buffered, sync, and report it. */
+			while (ret == 0 && k_msgq_get(&l_queue, &r, K_NO_WAIT) == 0)
+			{
+				n = logger_format_frame(
+					line, sizeof(line), r.t_ms, r.tx ? LOGGER_DIR_TX : LOGGER_DIR_RX, r.id, r.dlc, r.data);
+				ret = n > 0 ? append(line, n, k_uptime_get_32()) : 0;
+				l_lines++;
+			}
+			if (ret == 0)
+			{
+				ret = flush_buffer();
+			}
+			if (ret == 0)
+			{
+				ret = fs_sync(&l_file);
+			}
+			LOG_INF("stopped for a reboot: %u lines written (%d)", (unsigned)l_lines, ret);
+			return ret == 0 ? SD_STOPPED : ret;
+		}
 
 		if (k_msgq_get(&l_queue, &r, K_MSEC(TICK_MS)) == 0)
 		{
@@ -364,14 +443,23 @@ static int run_logging(void)
 			else
 			{
 				logger_policy_synced(&l_policy, now);
+				l_last_sync_ms = now;
 			}
 		}
 		if ((uint32_t)(now - last_status_ms) >= STATUS_LOG_MS)
 		{
-			LOG_INF("logged %u lines, %u bytes, %ld dropped",
+			int can_state = -1;
+			unsigned can_tec = 0, can_rec = 0;
+
+			(void)datalogger_can_status(&can_state, &can_tec, &can_rec);
+			LOG_INF("logged %u lines, %u bytes, %ld dropped, can state %d tec %u rec %u, last sync %u ms ago",
 					(unsigned)l_lines,
 					(unsigned)l_bytes,
-					(long)atomic_get(&l_dropped));
+					(long)atomic_get(&l_dropped),
+					can_state,
+					can_tec,
+					can_rec,
+					(unsigned)(now - l_last_sync_ms));
 			last_status_ms = now;
 		}
 	}
@@ -391,10 +479,21 @@ static void logger_thread(void *p1, void *p2, void *p3)
 
 	for (;;)
 	{
+		if (atomic_get(&l_stop) != 0)
+		{
+			k_sem_give(&l_stopped); /* a stop was asked for while no file was open */
+			k_sleep(K_FOREVER);
+		}
 		if (open_log() == 0)
 		{
 			int ret = run_logging();
 
+			if (ret == SD_STOPPED)
+			{
+				close_log();
+				k_sem_give(&l_stopped);
+				k_sleep(K_FOREVER); /* never reopen: the Node is about to reboot */
+			}
 			LOG_ERR("logging stopped (%d): the card was removed or failed", ret);
 			close_log();
 			set_state(SD_LOGGER_NO_CARD);
@@ -420,6 +519,21 @@ void sd_logger_start(void)
 					0,
 					K_NO_WAIT);
 	k_thread_name_set(&l_thread, "sd_logger");
+#ifdef DATALOGGER_SD_BENCH_FLOOD
+	k_thread_create(&l_flood_thread, l_flood_stack, K_THREAD_STACK_SIZEOF(l_flood_stack), flood_thread, NULL, NULL, NULL, THREAD_PRIORITY + 1, 0, K_NO_WAIT);
+#endif
+}
+
+bool sd_logger_prepare_reboot(uint32_t timeout_ms)
+{
+	bool was_logging = sd_logger_state() == SD_LOGGER_LOGGING;
+
+	atomic_set(&l_stop, 1);
+	if (!was_logging)
+	{
+		return true; /* nothing open to close; the thread will not open one */
+	}
+	return k_sem_take(&l_stopped, K_MSEC(timeout_ms)) == 0;
 }
 
 sd_logger_state_t sd_logger_state(void)
