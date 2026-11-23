@@ -12,3 +12,4 @@ Qty,Description,Manufacturer,MPN,DigiKey PN,Verified,Notes
 1,Crimp tool for 2.54 mm KK terminals,Engineer,PA-09,search MPN,No - confirm,Skip if you already own one
 1,22 AWG stranded wire red + black + 2 CAN colours,generic,,,N/A,12V GND CAN H CAN L leads
 10,Heat-shrink solder sleeve splice,generic,,,N/A,Tapping the gauge sensor wires
+10,TVS diode 1.5KE24A DO-201 (replaces owned 1.5KE36A at D3),Littelfuse,1.5KE24A,search MPN,No - confirm on DigiKey,Clamps ~33 V; 1.5KE36A clamps ~50 V which may exceed the OKI-78SR input limit (datasheet not verified)
